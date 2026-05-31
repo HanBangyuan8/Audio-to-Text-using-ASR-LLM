@@ -3,7 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
+    <string>zh_CN</string>
+    <key>CFBundleDisplayName</key>
+    <string>Audio to Text using ASR LLM</string>
     <key>CFBundleExecutable</key>
     <string>AudioToTextASRLLM</string>
     <key>CFBundleIdentifier</key>
@@ -14,6 +16,8 @@
     <string>Audio to Text using ASR LLM</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0.0</string>
     <key>CFBundleVersion</key>

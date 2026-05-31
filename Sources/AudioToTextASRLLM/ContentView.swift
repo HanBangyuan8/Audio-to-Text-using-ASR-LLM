@@ -348,14 +348,25 @@ private struct TranscriptDetailView: View {
             if let record = viewModel.selectedRecord, let result = record.result {
                 TranscriptPreview(result: result)
             } else {
-                ContentUnavailableView(
-                    "Transcript Preview",
-                    systemImage: "doc.text.magnifyingglass",
-                    description: Text("Completed transcriptions will appear here.")
-                )
+                EmptyTranscriptView()
             }
         }
         .padding(.bottom, 28)
+    }
+}
+
+private struct EmptyTranscriptView: View {
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 44))
+                .foregroundStyle(.secondary)
+            Text("Transcript Preview")
+                .font(.title3.weight(.semibold))
+            Text("Completed transcriptions will appear here.")
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.1
+
+Compatibility and repository metadata update.
+
+- Lowered runtime requirement from macOS 14+ to macOS 13+.
+- Lowered build tool requirement from Xcode 16+ / Swift 6.0+ to Xcode 15+ / Swift 5.9+.
+- Replaced the macOS 14-only empty-state view with a SwiftUI fallback compatible with macOS 13.
+- Switched the project license to MPL-2.0.
+- Aligned repository presentation and release asset naming with the other HanBangyuan8 repositories.
+
 ## v1.0.0
 
 Initial public release.

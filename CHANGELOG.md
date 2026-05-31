@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.2
+
+App icon packaging update.
+
+- Added a real macOS app icon to the packaged `.app` bundle.
+- Added `Resources/AppIcon.icns` for Finder, Dock, and app bundle metadata.
+- Added `Resources/AppIcon.png` at 1024x1024 for README display, matching the other HanBangyuan8 macOS repositories.
+- Updated README icon rendering to use the PNG app icon.
+- Updated the package script to copy the `.icns` icon into the app bundle.
+
 ## v1.0.1
 
 Compatibility and repository metadata update.

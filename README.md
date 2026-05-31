@@ -10,7 +10,7 @@
 A native macOS SwiftUI app for high-accuracy multilingual audio transcription with OpenAI-compatible ASR APIs, multimodal LLM gateways, custom JSON endpoints, and local ASR/LLM command pipelines.
 
 <p align="center">
-  <img src="Resources/AppIcon.svg" alt="Audio to Text using ASR LLM app icon" width="160">
+  <img src="Resources/AppIcon.png" alt="Audio to Text using ASR LLM app icon" width="160">
 </p>
 
 ## Features
@@ -88,7 +88,7 @@ open "dist/Audio to Text using ASR LLM.app"
 The package script creates a signed ad-hoc macOS `.app` and a versioned zip archive:
 
 ```text
-dist/Audio.to.Text.using.ASR.LLM-v1.0.1-macOS.zip
+dist/Audio.to.Text.using.ASR.LLM-v1.0.2-macOS.zip
 ```
 
 ## Data Location

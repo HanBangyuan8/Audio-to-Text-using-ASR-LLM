@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 APP_NAME="Audio to Text using ASR LLM"
 PRODUCT_NAME="AudioToTextASRLLM"
 BUNDLE_ID="dev.han.AudioToTextASRLLM"
-VERSION="1.0.1"
+VERSION="1.0.2"
 CONFIGURATION="${1:-release}"
 DIST_DIR="$ROOT_DIR/dist"
 FINAL_APP_DIR="$DIST_DIR/$APP_NAME.app"
@@ -49,8 +49,8 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "Support/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp ".build/$CONFIGURATION/$PRODUCT_NAME" "$MACOS_DIR/$PRODUCT_NAME"
 chmod +x "$MACOS_DIR/$PRODUCT_NAME"
-if [[ -f "Resources/AppIcon.svg" ]]; then
-  cp "Resources/AppIcon.svg" "$RESOURCES_DIR/AppIcon.svg"
+if [[ -f "Resources/AppIcon.icns" ]]; then
+  cp "Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 fi
 
 clean_bundle_metadata "$APP_DIR"

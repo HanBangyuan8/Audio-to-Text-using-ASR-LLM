@@ -21,8 +21,8 @@ func drawIcon(size: CGFloat) -> NSImage {
     rect.fill()
 
     let scale = size / 1024
-    let bgRect = NSRect(x: 64 * scale, y: 64 * scale, width: 896 * scale, height: 896 * scale)
-    let bgPath = NSBezierPath(roundedRect: bgRect, xRadius: 210 * scale, yRadius: 210 * scale)
+    let bgRect = NSRect(x: 116 * scale, y: 116 * scale, width: 792 * scale, height: 792 * scale)
+    let bgPath = NSBezierPath(roundedRect: bgRect, xRadius: 188 * scale, yRadius: 188 * scale)
     let gradient = NSGradient(colors: [
         NSColor(red: 0.13, green: 0.39, blue: 0.92, alpha: 1),
         NSColor(red: 0.05, green: 0.47, blue: 0.43, alpha: 1),
@@ -34,70 +34,97 @@ func drawIcon(size: CGFloat) -> NSImage {
     bgPath.lineWidth = 4 * scale
     bgPath.stroke()
 
-    let pageRect = NSRect(x: 360 * scale, y: 204 * scale, width: 360 * scale, height: 560 * scale)
-    let shadow = NSShadow()
-    shadow.shadowColor = NSColor.black.withAlphaComponent(0.22)
-    shadow.shadowOffset = NSSize(width: 0, height: -18 * scale)
-    shadow.shadowBlurRadius = 28 * scale
-    shadow.set()
+    NSGraphicsContext.saveGraphicsState()
+    let foregroundScale: CGFloat = 0.88
+    let foregroundTransform = NSAffineTransform()
+    foregroundTransform.translateX(by: size / 2, yBy: size / 2)
+    foregroundTransform.scale(by: foregroundScale)
+    foregroundTransform.translateX(by: -size / 2, yBy: -size / 2)
+    foregroundTransform.concat()
 
-    let page = NSBezierPath(roundedRect: pageRect, xRadius: 56 * scale, yRadius: 56 * scale)
-    NSColor(red: 0.94, green: 0.97, blue: 1, alpha: 1).setFill()
-    page.fill()
-    NSShadow().set()
-
-    let fold = NSBezierPath()
-    fold.move(to: NSPoint(x: 624 * scale, y: 764 * scale))
-    fold.line(to: NSPoint(x: 720 * scale, y: 668 * scale))
-    fold.line(to: NSPoint(x: 642 * scale, y: 668 * scale))
-    fold.curve(to: NSPoint(x: 624 * scale, y: 686 * scale),
-               controlPoint1: NSPoint(x: 632 * scale, y: 668 * scale),
-               controlPoint2: NSPoint(x: 624 * scale, y: 676 * scale))
-    fold.close()
-    NSColor(red: 0.72, green: 0.84, blue: 1, alpha: 1).setFill()
-    fold.fill()
-
-    func line(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ color: NSColor) {
-        let path = NSBezierPath(roundedRect: NSRect(x: x * scale, y: y * scale, width: width * scale, height: 32 * scale),
-                                xRadius: 16 * scale,
-                                yRadius: 16 * scale)
+    func roundedRect(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat, radius: CGFloat, color: NSColor) {
+        let path = NSBezierPath(
+            roundedRect: NSRect(x: x * scale, y: y * scale, width: width * scale, height: height * scale),
+            xRadius: radius * scale,
+            yRadius: radius * scale
+        )
         color.setFill()
         path.fill()
     }
-    line(424, 552, 232, NSColor(red: 0.10, green: 0.31, blue: 0.82, alpha: 1))
-    line(424, 466, 184, NSColor(red: 0.05, green: 0.47, blue: 0.43, alpha: 1))
-    line(424, 386, 224, NSColor(red: 0.05, green: 0.47, blue: 0.43, alpha: 0.82))
-    line(424, 306, 148, NSColor(red: 0.05, green: 0.47, blue: 0.43, alpha: 0.68))
 
-    func wave(points: [CGPoint], color: NSColor, width: CGFloat) {
-        let path = NSBezierPath()
-        path.move(to: NSPoint(x: points[0].x * scale, y: points[0].y * scale))
-        for point in points.dropFirst() {
-            path.line(to: NSPoint(x: point.x * scale, y: point.y * scale))
-        }
-        color.setStroke()
-        path.lineWidth = width * scale
-        path.lineCapStyle = .round
-        path.lineJoinStyle = .round
-        path.stroke()
+    func capsule(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat, color: NSColor) {
+        roundedRect(x, y, width, height, radius: height / 2, color: color)
     }
 
-    wave(points: [
-        CGPoint(x: 172, y: 472),
-        CGPoint(x: 240, y: 600),
-        CGPoint(x: 312, y: 364),
-        CGPoint(x: 376, y: 488),
-        CGPoint(x: 420, y: 434)
-    ], color: NSColor(red: 0.65, green: 0.96, blue: 0.82, alpha: 1), width: 54)
+    func label(_ text: String, x: CGFloat, y: CGFloat, size fontSize: CGFloat, color: NSColor) {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize * scale, weight: .bold),
+            .foregroundColor: color
+        ]
+        NSAttributedString(string: text, attributes: attributes)
+            .draw(at: NSPoint(x: x * scale, y: y * scale))
+    }
 
-    wave(points: [
-        CGPoint(x: 154, y: 314),
-        CGPoint(x: 224, y: 386),
-        CGPoint(x: 302, y: 260),
-        CGPoint(x: 370, y: 330),
-        CGPoint(x: 424, y: 296)
-    ], color: NSColor(red: 0.58, green: 0.77, blue: 1, alpha: 0.95), width: 40)
+    let shadow = NSShadow()
+    shadow.shadowColor = NSColor.black.withAlphaComponent(0.22)
+    shadow.shadowOffset = NSSize(width: 0, height: -16 * scale)
+    shadow.shadowBlurRadius = 26 * scale
+    shadow.set()
 
+    roundedRect(190, 330, 270, 300, radius: 64, color: NSColor(red: 0.02, green: 0.17, blue: 0.28, alpha: 0.62))
+    roundedRect(554, 264, 286, 432, radius: 56, color: NSColor(red: 0.94, green: 0.97, blue: 1, alpha: 1))
+    NSShadow().set()
+
+    label("WAV", x: 248, y: 356, size: 46, color: NSColor(red: 0.67, green: 0.96, blue: 0.83, alpha: 1))
+    label("TXT", x: 614, y: 604, size: 52, color: NSColor(red: 0.09, green: 0.30, blue: 0.82, alpha: 1))
+
+    let fold = NSBezierPath()
+    fold.move(to: NSPoint(x: 750 * scale, y: 696 * scale))
+    fold.line(to: NSPoint(x: 840 * scale, y: 606 * scale))
+    fold.line(to: NSPoint(x: 768 * scale, y: 606 * scale))
+    fold.curve(to: NSPoint(x: 750 * scale, y: 624 * scale),
+               controlPoint1: NSPoint(x: 758 * scale, y: 606 * scale),
+               controlPoint2: NSPoint(x: 750 * scale, y: 614 * scale))
+    fold.close()
+    NSColor(red: 0.70, green: 0.83, blue: 1, alpha: 1).setFill()
+    fold.fill()
+
+    let wavePath = NSBezierPath()
+    wavePath.move(to: NSPoint(x: 224 * scale, y: 492 * scale))
+    wavePath.line(to: NSPoint(x: 254 * scale, y: 492 * scale))
+    wavePath.line(to: NSPoint(x: 284 * scale, y: 562 * scale))
+    wavePath.line(to: NSPoint(x: 326 * scale, y: 408 * scale))
+    wavePath.line(to: NSPoint(x: 366 * scale, y: 558 * scale))
+    wavePath.line(to: NSPoint(x: 398 * scale, y: 492 * scale))
+    wavePath.line(to: NSPoint(x: 428 * scale, y: 492 * scale))
+    NSColor(red: 0.65, green: 0.96, blue: 0.82, alpha: 1).setStroke()
+    wavePath.lineWidth = 34 * scale
+    wavePath.lineCapStyle = .round
+    wavePath.lineJoinStyle = .round
+    wavePath.stroke()
+
+    let arrow = NSBezierPath()
+    arrow.move(to: NSPoint(x: 466 * scale, y: 488 * scale))
+    arrow.line(to: NSPoint(x: 534 * scale, y: 488 * scale))
+    NSColor.white.withAlphaComponent(0.92).setStroke()
+    arrow.lineWidth = 30 * scale
+    arrow.lineCapStyle = .round
+    arrow.stroke()
+
+    let arrowHead = NSBezierPath()
+    arrowHead.move(to: NSPoint(x: 528 * scale, y: 534 * scale))
+    arrowHead.line(to: NSPoint(x: 594 * scale, y: 488 * scale))
+    arrowHead.line(to: NSPoint(x: 528 * scale, y: 442 * scale))
+    arrowHead.close()
+    NSColor.white.withAlphaComponent(0.92).setFill()
+    arrowHead.fill()
+
+    capsule(612, 528, 172, 26, color: NSColor(red: 0.05, green: 0.47, blue: 0.43, alpha: 1))
+    capsule(612, 468, 196, 24, color: NSColor(red: 0.05, green: 0.47, blue: 0.43, alpha: 0.82))
+    capsule(612, 410, 150, 24, color: NSColor(red: 0.05, green: 0.47, blue: 0.43, alpha: 0.68))
+    capsule(612, 352, 186, 24, color: NSColor(red: 0.10, green: 0.31, blue: 0.82, alpha: 0.72))
+
+    NSGraphicsContext.restoreGraphicsState()
     image.unlockFocus()
     return image
 }

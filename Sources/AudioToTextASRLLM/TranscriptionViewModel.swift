@@ -8,7 +8,9 @@ final class TranscriptionViewModel: ObservableObject {
     @Published var configuration: ProviderConfiguration {
         didSet { saveConfiguration() }
     }
-    @Published var records: [TranscriptionRecord] = []
+    @Published var records: [TranscriptionRecord] = [] {
+        didSet { saveRecords() }
+    }
     @Published var selectedRecordID: TranscriptionRecord.ID?
     @Published var exportFormat: TextExportFormat = .markdown
     @Published var statusMessage = "Ready"
@@ -38,6 +40,8 @@ final class TranscriptionViewModel: ObservableObject {
 
     init() {
         configuration = Self.loadConfiguration()
+        records = Self.loadRecords()
+        selectedRecordID = records.first?.id
     }
 
     func pickAudioFiles() {
@@ -69,6 +73,11 @@ final class TranscriptionViewModel: ObservableObject {
         self.selectedRecordID = records.first?.id
     }
 
+    func revealSelectedAudioFile() {
+        guard let record = selectedRecord else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([record.file.url])
+    }
+
     func clearCompleted() {
         records.removeAll { $0.status == .complete }
         selectedRecordID = records.first?.id
@@ -90,6 +99,50 @@ final class TranscriptionViewModel: ObservableObject {
             configuration.endpointPath = configuration.backend.recommendedEndpointPath
         }
         statusMessage = "Applied preset: \(preset.name)"
+    }
+
+    func importConfiguration() {
+        let panel = NSOpenPanel()
+        panel.title = "Import provider configuration"
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let data = try Data(contentsOf: url)
+            configuration = try JSONDecoder().decode(ProviderConfiguration.self, from: data)
+            statusMessage = "Imported configuration"
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    func exportConfiguration() {
+        let panel = NSSavePanel()
+        panel.title = "Export provider configuration"
+        panel.nameFieldStringValue = "asr-llm-provider.json"
+        panel.allowedContentTypes = [.json]
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(configuration)
+            try data.write(to: url, options: .atomic)
+            statusMessage = "Exported configuration"
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    func copySelectedTranscript() {
+        guard let text = selectedRecord?.result?.text, !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        statusMessage = "Copied transcript"
     }
 
     func transcribeSelectedFiles() async {
@@ -213,6 +266,59 @@ final class TranscriptionViewModel: ObservableObject {
         }
 
         return configuration
+    }
+
+    private func saveRecords() {
+        let snapshot = records.map { record in
+            var copy = record
+            if copy.status == .running {
+                copy.status = .queued
+            }
+            return copy
+        }
+
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(snapshot)
+            try FileManager.default.createDirectory(
+                at: Self.applicationSupportDirectory,
+                withIntermediateDirectories: true
+            )
+            try data.write(to: Self.recordsURL, options: .atomic)
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    private static func loadRecords() -> [TranscriptionRecord] {
+        guard let data = try? Data(contentsOf: recordsURL) else {
+            return []
+        }
+
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode([TranscriptionRecord].self, from: data).map { record in
+                var copy = record
+                if copy.status == .running {
+                    copy.status = .queued
+                }
+                return copy
+            }
+        } catch {
+            return []
+        }
+    }
+
+    private static var applicationSupportDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("AudioToTextASRLLM", isDirectory: true)
+    }
+
+    private static var recordsURL: URL {
+        applicationSupportDirectory.appendingPathComponent("records.json")
     }
 
     private static var supportedAudioTypes: [UTType] {

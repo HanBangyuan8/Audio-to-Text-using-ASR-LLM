@@ -44,6 +44,16 @@ struct AudioToTextASRLLMApp: App {
                 }
                 .disabled(viewModel.completedRecords.isEmpty)
             }
+
+            CommandMenu("Provider") {
+                Button("Import Configuration...") {
+                    viewModel.importConfiguration()
+                }
+
+                Button("Export Configuration...") {
+                    viewModel.exportConfiguration()
+                }
+            }
         }
     }
 }

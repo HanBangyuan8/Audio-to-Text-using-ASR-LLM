@@ -8,7 +8,9 @@ enum ASRClientError: LocalizedError {
     case requestFailed(status: Int, body: String)
     case missingText
     case missingLocalCommand
+    case invalidRetryCount
     case localCommandFailed(status: Int32, output: String)
+    case localCommandTimedOut(seconds: Double)
 
     var errorDescription: String? {
         switch self {
@@ -24,14 +26,42 @@ enum ASRClientError: LocalizedError {
             "The transcription response did not include recognized text."
         case .missingLocalCommand:
             "Local command template is empty."
+        case .invalidRetryCount:
+            "Retry count must be zero or greater."
         case .localCommandFailed(let status, let output):
             "Local command failed with exit code \(status): \(output)"
+        case .localCommandTimedOut(let seconds):
+            "Local command timed out after \(Int(seconds)) seconds."
         }
     }
 }
 
 struct ASRClient {
     func transcribe(fileURL: URL, configuration: ProviderConfiguration) async throws -> TranscriptionResult {
+        guard configuration.maxRetries >= 0 else {
+            throw ASRClientError.invalidRetryCount
+        }
+
+        var lastError: Error?
+        let attempts = configuration.maxRetries + 1
+        for attempt in 1...attempts {
+            do {
+                return try await transcribeOnce(fileURL: fileURL, configuration: configuration)
+            } catch {
+                lastError = error
+                if attempt < attempts && shouldRetry(error) {
+                    let delay = UInt64(min(4.0, pow(2.0, Double(attempt - 1))) * 1_000_000_000)
+                    try await Task.sleep(nanoseconds: delay)
+                    continue
+                }
+                throw error
+            }
+        }
+
+        throw lastError ?? ASRClientError.invalidResponse
+    }
+
+    private func transcribeOnce(fileURL: URL, configuration: ProviderConfiguration) async throws -> TranscriptionResult {
         switch configuration.backend {
         case .apiTranscriptions:
             return try await transcribeWithMultipartAPI(fileURL: fileURL, configuration: configuration)
@@ -46,6 +76,22 @@ struct ASRClient {
         }
     }
 
+    private func shouldRetry(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return false
+        }
+
+        if case ASRClientError.requestFailed(let status, _) = error {
+            return status == 408 || status == 409 || status == 425 || status == 429 || (500...599).contains(status)
+        }
+
+        if case ASRClientError.localCommandFailed = error {
+            return false
+        }
+
+        return true
+    }
+
     private func transcribeWithMultipartAPI(fileURL: URL, configuration: ProviderConfiguration) async throws -> TranscriptionResult {
         guard let endpoint = configuration.resolvedEndpoint else {
             throw ASRClientError.invalidEndpoint
@@ -57,6 +103,7 @@ struct ASRClient {
 
         let boundary = "Boundary-\(UUID().uuidString)"
         var request = URLRequest(url: endpoint)
+        request.timeoutInterval = normalizedTimeout(configuration.requestTimeout)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.setValue("AudioToTextASRLLM/1.0", forHTTPHeaderField: "User-Agent")
@@ -107,6 +154,7 @@ struct ASRClient {
         }
 
         var request = URLRequest(url: endpoint)
+        request.timeoutInterval = normalizedTimeout(configuration.requestTimeout)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("AudioToTextASRLLM/1.0", forHTTPHeaderField: "User-Agent")
@@ -184,6 +232,7 @@ struct ASRClient {
         }
 
         var request = URLRequest(url: endpoint)
+        request.timeoutInterval = normalizedTimeout(configuration.requestTimeout)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("AudioToTextASRLLM/1.0", forHTTPHeaderField: "User-Agent")
@@ -459,6 +508,10 @@ struct ASRClient {
         default: "application/octet-stream"
         }
     }
+
+    private func normalizedTimeout(_ timeout: Double) -> TimeInterval {
+        max(30, min(timeout, 86_400))
+    }
 }
 
 private enum LocalASRRunner {
@@ -487,7 +540,7 @@ private enum LocalASRRunner {
         process.standardError = pipe
 
         try process.run()
-        process.waitUntilExit()
+        try waitForProcess(process, timeout: configuration.requestTimeout)
 
         let outputData = pipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(data: outputData, encoding: .utf8) ?? ""
@@ -539,6 +592,20 @@ private enum LocalASRRunner {
             throw ASRClientError.missingText
         }
         return text
+    }
+
+    private static func waitForProcess(_ process: Process, timeout: Double) throws {
+        let normalizedTimeout = max(30, min(timeout, 86_400))
+        let semaphore = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async {
+            process.waitUntilExit()
+            semaphore.signal()
+        }
+
+        if semaphore.wait(timeout: .now() + normalizedTimeout) == .timedOut {
+            process.terminate()
+            throw ASRClientError.localCommandTimedOut(seconds: normalizedTimeout)
+        }
     }
 
     private static func shellQuote(_ value: String) -> String {

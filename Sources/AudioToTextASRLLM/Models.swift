@@ -10,6 +10,8 @@ struct ProviderConfiguration: Codable, Equatable, Sendable {
     var prompt: String = ""
     var responseFormat: ASRResponseFormat = .verboseJSON
     var temperature: Double = 0
+    var requestTimeout: Double = 300
+    var maxRetries: Int = 1
     var chatAudioPayload: ChatAudioPayloadMode = .inputAudio
     var customHeaders: String = ""
     var extraFields: String = ""
@@ -250,8 +252,8 @@ extension ProviderConfiguration {
     """
 }
 
-struct AudioFile: Identifiable, Hashable, Sendable {
-    let id = UUID()
+struct AudioFile: Identifiable, Codable, Hashable, Sendable {
+    var id = UUID()
     let url: URL
 
     var name: String { url.lastPathComponent }
@@ -280,15 +282,15 @@ struct TranscriptionResult: Codable, Hashable, Sendable {
     var createdAt: Date = .now
 }
 
-struct TranscriptionRecord: Identifiable, Hashable, Sendable {
-    let id = UUID()
+struct TranscriptionRecord: Identifiable, Codable, Hashable, Sendable {
+    var id = UUID()
     var file: AudioFile
     var result: TranscriptionResult?
     var status: TranscriptionStatus = .queued
     var errorMessage: String?
 }
 
-enum TranscriptionStatus: Hashable, Sendable {
+enum TranscriptionStatus: String, Codable, Hashable, Sendable {
     case queued
     case running
     case complete

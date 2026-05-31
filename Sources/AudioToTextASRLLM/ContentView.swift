@@ -62,6 +62,11 @@ private struct FileQueueView: View {
                 .disabled(viewModel.selectedRecord == nil || viewModel.isTranscribing)
 
                 Menu {
+                    Button("Reveal Audio File") {
+                        viewModel.revealSelectedAudioFile()
+                    }
+                    .disabled(viewModel.selectedRecord == nil)
+
                     Button("Reset Failed/Canceled") {
                         viewModel.resetFailedAndCanceled()
                     }
@@ -197,6 +202,17 @@ private struct ConfigurationView: View {
                     }
             }
 
+            Section("Reliability") {
+                Stepper(value: $viewModel.configuration.maxRetries, in: 0...10) {
+                    Text("Retries: \(viewModel.configuration.maxRetries)")
+                }
+
+                VStack(alignment: .leading) {
+                    Text("Timeout: \(Int(viewModel.configuration.requestTimeout)) seconds")
+                    Slider(value: $viewModel.configuration.requestTimeout, in: 30...3600, step: 30)
+                }
+            }
+
             Section("Advanced") {
                 if viewModel.configuration.backend == .apiCustomJSON {
                     TextField("Response text path, e.g. choices.0.message.content", text: $viewModel.configuration.responseTextPath)
@@ -308,6 +324,13 @@ private struct TranscriptDetailView: View {
                     viewModel.exportSelectedResult()
                 } label: {
                     Label("Export", systemImage: "square.and.arrow.down")
+                }
+                .disabled(viewModel.selectedRecord?.result == nil)
+
+                Button {
+                    viewModel.copySelectedTranscript()
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
                 }
                 .disabled(viewModel.selectedRecord?.result == nil)
 

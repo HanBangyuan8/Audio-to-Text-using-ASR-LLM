@@ -13,6 +13,9 @@ A native SwiftUI macOS app for high-accuracy multilingual audio transcription th
 - Works with providers that expose `/v1/audio/transcriptions` style APIs.
 - Model field accepts any provider model name, such as OpenAI, Qwen, Mimo, Gemini-compatible proxy models, or local gateway models.
 - Optional language hint, prompt/glossary, response format, temperature, custom HTTP headers, and custom multipart fields.
+- Request timeout and retry controls for unstable APIs or long-running local pipelines.
+- Transcription queue and completed results are restored between launches.
+- Import and export provider configuration as JSON.
 - Queue-based transcription for multiple files.
 - Export one transcript or all completed transcripts.
 - Export transcripts as TXT, Markdown, SRT, WebVTT, JSON, CSV, TSV, or HTML.
@@ -40,6 +43,14 @@ The app bundle will be created at:
 
 ```text
 dist/Audio to Text using ASR LLM.app
+```
+
+## v1.0.0 Release Checklist
+
+```bash
+swift build
+swift build -c release
+./scripts/package-app.sh
 ```
 
 ## Provider Setup

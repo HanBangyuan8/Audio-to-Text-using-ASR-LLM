@@ -2,7 +2,7 @@
 
 ## v1.0.2
 
-App icon packaging update.
+Patch release.
 
 - Added a real macOS app icon to the packaged `.app` bundle.
 - Added `Resources/AppIcon.icns` for Finder, Dock, and app bundle metadata.
@@ -12,7 +12,7 @@ App icon packaging update.
 
 ## v1.0.1
 
-Compatibility and repository metadata update.
+Patch release.
 
 - Lowered runtime requirement from macOS 14+ to macOS 13+.
 - Lowered build tool requirement from Xcode 16+ / Swift 6.0+ to Xcode 15+ / Swift 5.9+.

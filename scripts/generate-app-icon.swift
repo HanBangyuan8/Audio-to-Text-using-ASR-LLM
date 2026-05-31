@@ -13,116 +13,55 @@ try? FileManager.default.removeItem(at: iconset)
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
 
 func drawIcon(size: CGFloat) -> NSImage {
+    let scale = size / 1024
     let image = NSImage(size: NSSize(width: size, height: size))
     image.lockFocus()
 
-    let rect = NSRect(x: 0, y: 0, width: size, height: size)
     NSColor.clear.setFill()
-    rect.fill()
+    NSRect(x: 0, y: 0, width: size, height: size).fill()
 
-    let scale = size / 1024
     let bgRect = NSRect(x: 116 * scale, y: 116 * scale, width: 792 * scale, height: 792 * scale)
     let bgPath = NSBezierPath(roundedRect: bgRect, xRadius: 188 * scale, yRadius: 188 * scale)
     let gradient = NSGradient(colors: [
-        NSColor(red: 0.13, green: 0.39, blue: 0.92, alpha: 1),
-        NSColor(red: 0.05, green: 0.47, blue: 0.43, alpha: 1),
-        NSColor(red: 0.07, green: 0.10, blue: 0.17, alpha: 1)
+        NSColor(red: 0.38, green: 0.43, blue: 0.96, alpha: 1),
+        NSColor(red: 0.09, green: 0.55, blue: 0.62, alpha: 1),
+        NSColor(red: 0.07, green: 0.11, blue: 0.19, alpha: 1)
     ])!
-    gradient.draw(in: bgPath, angle: -38)
+    gradient.draw(in: bgPath, angle: -36)
 
-    NSColor.white.withAlphaComponent(0.10).setStroke()
-    bgPath.lineWidth = 4 * scale
+    NSColor.white.withAlphaComponent(0.18).setStroke()
+    bgPath.lineWidth = 5 * scale
     bgPath.stroke()
 
-    NSGraphicsContext.saveGraphicsState()
-    let foregroundScale: CGFloat = 0.88
-    let foregroundTransform = NSAffineTransform()
-    foregroundTransform.translateX(by: size / 2, yBy: size / 2)
-    foregroundTransform.scale(by: foregroundScale)
-    foregroundTransform.translateX(by: -size / 2, yBy: -size / 2)
-    foregroundTransform.concat()
-
-    func roundedRect(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat, radius: CGFloat, color: NSColor) {
+    func capsule(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, alpha: CGFloat = 1) {
         let path = NSBezierPath(
             roundedRect: NSRect(x: x * scale, y: y * scale, width: width * scale, height: height * scale),
-            xRadius: radius * scale,
-            yRadius: radius * scale
+            xRadius: height * scale / 2,
+            yRadius: height * scale / 2
         )
-        color.setFill()
+        NSColor.white.withAlphaComponent(alpha).setFill()
         path.fill()
     }
 
-    func capsule(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat, color: NSColor) {
-        roundedRect(x, y, width, height, radius: height / 2, color: color)
-    }
+    NSGraphicsContext.saveGraphicsState()
+    let transform = NSAffineTransform()
+    transform.translateX(by: size / 2, yBy: size / 2)
+    transform.scale(by: 0.94)
+    transform.translateX(by: -size / 2, yBy: -size / 2)
+    transform.concat()
 
-    func label(_ text: String, x: CGFloat, y: CGFloat, size fontSize: CGFloat, color: NSColor) {
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: fontSize * scale, weight: .bold),
-            .foregroundColor: color
-        ]
-        NSAttributedString(string: text, attributes: attributes)
-            .draw(at: NSPoint(x: x * scale, y: y * scale))
-    }
+    // Audio bars, progressively resolving into text lines.
+    capsule(x: 268, y: 432, width: 42, height: 160, alpha: 0.92)
+    capsule(x: 336, y: 360, width: 42, height: 304, alpha: 1.00)
+    capsule(x: 404, y: 410, width: 42, height: 204, alpha: 0.94)
+    capsule(x: 472, y: 386, width: 42, height: 252, alpha: 0.86)
 
-    let shadow = NSShadow()
-    shadow.shadowColor = NSColor.black.withAlphaComponent(0.22)
-    shadow.shadowOffset = NSSize(width: 0, height: -16 * scale)
-    shadow.shadowBlurRadius = 26 * scale
-    shadow.set()
+    capsule(x: 570, y: 598, width: 210, height: 46, alpha: 1.00)
+    capsule(x: 570, y: 489, width: 270, height: 46, alpha: 0.88)
+    capsule(x: 570, y: 380, width: 190, height: 46, alpha: 0.72)
 
-    roundedRect(190, 330, 270, 300, radius: 64, color: NSColor(red: 0.02, green: 0.17, blue: 0.28, alpha: 0.62))
-    roundedRect(554, 264, 286, 432, radius: 56, color: NSColor(red: 0.94, green: 0.97, blue: 1, alpha: 1))
-    NSShadow().set()
-
-    label("WAV", x: 248, y: 356, size: 46, color: NSColor(red: 0.67, green: 0.96, blue: 0.83, alpha: 1))
-    label("TXT", x: 614, y: 604, size: 52, color: NSColor(red: 0.09, green: 0.30, blue: 0.82, alpha: 1))
-
-    let fold = NSBezierPath()
-    fold.move(to: NSPoint(x: 750 * scale, y: 696 * scale))
-    fold.line(to: NSPoint(x: 840 * scale, y: 606 * scale))
-    fold.line(to: NSPoint(x: 768 * scale, y: 606 * scale))
-    fold.curve(to: NSPoint(x: 750 * scale, y: 624 * scale),
-               controlPoint1: NSPoint(x: 758 * scale, y: 606 * scale),
-               controlPoint2: NSPoint(x: 750 * scale, y: 614 * scale))
-    fold.close()
-    NSColor(red: 0.70, green: 0.83, blue: 1, alpha: 1).setFill()
-    fold.fill()
-
-    let wavePath = NSBezierPath()
-    wavePath.move(to: NSPoint(x: 224 * scale, y: 492 * scale))
-    wavePath.line(to: NSPoint(x: 254 * scale, y: 492 * scale))
-    wavePath.line(to: NSPoint(x: 284 * scale, y: 562 * scale))
-    wavePath.line(to: NSPoint(x: 326 * scale, y: 408 * scale))
-    wavePath.line(to: NSPoint(x: 366 * scale, y: 558 * scale))
-    wavePath.line(to: NSPoint(x: 398 * scale, y: 492 * scale))
-    wavePath.line(to: NSPoint(x: 428 * scale, y: 492 * scale))
-    NSColor(red: 0.65, green: 0.96, blue: 0.82, alpha: 1).setStroke()
-    wavePath.lineWidth = 34 * scale
-    wavePath.lineCapStyle = .round
-    wavePath.lineJoinStyle = .round
-    wavePath.stroke()
-
-    let arrow = NSBezierPath()
-    arrow.move(to: NSPoint(x: 466 * scale, y: 488 * scale))
-    arrow.line(to: NSPoint(x: 534 * scale, y: 488 * scale))
-    NSColor.white.withAlphaComponent(0.92).setStroke()
-    arrow.lineWidth = 30 * scale
-    arrow.lineCapStyle = .round
-    arrow.stroke()
-
-    let arrowHead = NSBezierPath()
-    arrowHead.move(to: NSPoint(x: 528 * scale, y: 534 * scale))
-    arrowHead.line(to: NSPoint(x: 594 * scale, y: 488 * scale))
-    arrowHead.line(to: NSPoint(x: 528 * scale, y: 442 * scale))
-    arrowHead.close()
-    NSColor.white.withAlphaComponent(0.92).setFill()
-    arrowHead.fill()
-
-    capsule(612, 528, 172, 26, color: NSColor(red: 0.05, green: 0.47, blue: 0.43, alpha: 1))
-    capsule(612, 468, 196, 24, color: NSColor(red: 0.05, green: 0.47, blue: 0.43, alpha: 0.82))
-    capsule(612, 410, 150, 24, color: NSColor(red: 0.05, green: 0.47, blue: 0.43, alpha: 0.68))
-    capsule(612, 352, 186, 24, color: NSColor(red: 0.10, green: 0.31, blue: 0.82, alpha: 0.72))
+    // A small quiet connector keeps the conversion readable without becoming an arrow.
+    capsule(x: 524, y: 489, width: 38, height: 46, alpha: 0.78)
 
     NSGraphicsContext.restoreGraphicsState()
     image.unlockFocus()

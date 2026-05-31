@@ -109,7 +109,7 @@ Release notes are maintained in `CHANGELOG.md`.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MPL-2.0. See [LICENSE](LICENSE).
 
 ## Star History
 

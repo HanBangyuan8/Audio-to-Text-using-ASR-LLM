@@ -4,7 +4,8 @@ import Foundation
 
 let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 let resources = root.appendingPathComponent("Resources", isDirectory: true)
-let iconset = resources.appendingPathComponent("AppIcon.iconset", isDirectory: true)
+let iconset = FileManager.default.temporaryDirectory
+    .appendingPathComponent("AudioToTextASRLLM-AppIcon.iconset", isDirectory: true)
 let pngURL = resources.appendingPathComponent("AppIcon.png")
 let icnsURL = resources.appendingPathComponent("AppIcon.icns")
 
@@ -14,24 +15,20 @@ try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories
 
 func drawIcon(size: CGFloat) -> NSImage {
     let scale = size / 1024
+    let iconFrame = NSRect(x: 96 * scale, y: 96 * scale, width: 832 * scale, height: 832 * scale)
     let image = NSImage(size: NSSize(width: size, height: size))
     image.lockFocus()
 
     NSColor.clear.setFill()
     NSRect(x: 0, y: 0, width: size, height: size).fill()
 
-    let bgRect = NSRect(x: 116 * scale, y: 116 * scale, width: 792 * scale, height: 792 * scale)
-    let bgPath = NSBezierPath(roundedRect: bgRect, xRadius: 188 * scale, yRadius: 188 * scale)
+    let bgPath = NSBezierPath(roundedRect: iconFrame, xRadius: 198 * scale, yRadius: 198 * scale)
     let gradient = NSGradient(colors: [
         NSColor(red: 0.38, green: 0.43, blue: 0.96, alpha: 1),
         NSColor(red: 0.09, green: 0.55, blue: 0.62, alpha: 1),
         NSColor(red: 0.07, green: 0.11, blue: 0.19, alpha: 1)
     ])!
     gradient.draw(in: bgPath, angle: -36)
-
-    NSColor.white.withAlphaComponent(0.18).setStroke()
-    bgPath.lineWidth = 5 * scale
-    bgPath.stroke()
 
     func capsule(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, alpha: CGFloat = 1) {
         let path = NSBezierPath(

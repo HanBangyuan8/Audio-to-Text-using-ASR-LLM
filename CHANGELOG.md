@@ -4,11 +4,8 @@
 
 Patch release.
 
-- Added a real macOS app icon to the packaged `.app` bundle.
-- Added `Resources/AppIcon.icns` for Finder, Dock, and app bundle metadata.
-- Added a 1024x1024 README icon that visually shows WAV audio transforming into TXT text, matching the other HanBangyuan8 macOS repositories.
-- Updated README icon rendering to use the PNG app icon.
-- Updated the package script to copy the `.icns` icon into the app bundle.
+- Added a correctly sized macOS app icon that visually shows audio transforming into text.
+- Embedded the refreshed icon in the README, app bundle, and release package.
 
 ## v1.0.1
 

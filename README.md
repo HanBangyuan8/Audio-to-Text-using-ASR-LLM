@@ -88,7 +88,7 @@ open "dist/Audio to Text using ASR LLM.app"
 The package script creates a signed ad-hoc macOS `.app` and a versioned zip archive:
 
 ```text
-dist/Audio.to.Text.using.ASR.LLM-v1.0.2-macOS.zip
+dist/Audio-to-Text-using-ASR-LLM-v1.0.2-macOS-arm64.zip
 ```
 
 ## Data Location

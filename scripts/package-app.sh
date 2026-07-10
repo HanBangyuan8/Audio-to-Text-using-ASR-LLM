@@ -10,9 +10,9 @@ BUNDLE_ID="dev.han.AudioToTextASRLLM"
 VERSION="1.0.2"
 CONFIGURATION="${1:-release}"
 DIST_DIR="$ROOT_DIR/dist"
-FINAL_APP_DIR="$DIST_DIR/$APP_NAME.app"
-FINAL_ZIP_PATH="$DIST_DIR/Audio.to.Text.using.ASR.LLM-v${VERSION}-macOS.zip"
-LEGACY_ZIP_PATH="$DIST_DIR/$APP_NAME.zip"
+ARCH_NAME="$(uname -m)"
+FINAL_APP_DIR="$DIST_DIR/Audio-to-Text-using-ASR-LLM-v${VERSION}.app"
+FINAL_ZIP_PATH="$DIST_DIR/Audio-to-Text-using-ASR-LLM-v${VERSION}-macOS-${ARCH_NAME}.zip"
 STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/audio-to-text-asr-llm.XXXXXX")"
 APP_DIR="$STAGE_DIR/$APP_NAME.app"
 VERIFY_DIR="$STAGE_DIR/verify"
@@ -41,7 +41,7 @@ clean_bundle_metadata() {
 }
 
 mkdir -p "$DIST_DIR"
-rm -rf "$APP_DIR" "$FINAL_APP_DIR" "$FINAL_ZIP_PATH" "$LEGACY_ZIP_PATH"
+rm -rf "$APP_DIR" "$FINAL_APP_DIR" "$FINAL_ZIP_PATH"
 
 swift build -c "$CONFIGURATION"
 
@@ -66,7 +66,5 @@ codesign --verify --deep --strict --verbose=2 "$VERIFY_DIR/$APP_NAME.app"
 ditto --norsrc "$APP_DIR" "$FINAL_APP_DIR"
 clean_bundle_metadata "$FINAL_APP_DIR"
 codesign --verify --deep "$FINAL_APP_DIR"
-cp "$FINAL_ZIP_PATH" "$LEGACY_ZIP_PATH"
-
 echo "Packaged:"
-ls -lh "$FINAL_APP_DIR" "$FINAL_ZIP_PATH" "$LEGACY_ZIP_PATH"
+ls -lh "$FINAL_APP_DIR" "$FINAL_ZIP_PATH"

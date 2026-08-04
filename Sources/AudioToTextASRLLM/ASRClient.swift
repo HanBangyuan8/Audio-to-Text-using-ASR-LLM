@@ -566,9 +566,9 @@ private enum LocalASRRunner {
         configuration: ProviderConfiguration
     ) -> String {
         template
-            .replacingOccurrences(of: "{audio}", with: shellQuote(fileURL.path(percentEncoded: false)))
-            .replacingOccurrences(of: "{outputBase}", with: shellQuote(outputBase.path(percentEncoded: false)))
-            .replacingOccurrences(of: "{output}", with: shellQuote(outputBase.appendingPathExtension("txt").path(percentEncoded: false)))
+            .replacingOccurrences(of: "{audio}", with: shellQuote(fileURL.path))
+            .replacingOccurrences(of: "{outputBase}", with: shellQuote(outputBase.path))
+            .replacingOccurrences(of: "{output}", with: shellQuote(outputBase.appendingPathExtension("txt").path))
             .replacingOccurrences(of: "{model}", with: shellQuote(configuration.model))
             .replacingOccurrences(of: "{language}", with: shellQuote(configuration.language))
             .replacingOccurrences(of: "{prompt}", with: shellQuote(configuration.prompt))
@@ -579,7 +579,7 @@ private enum LocalASRRunner {
             outputBase.appendingPathExtension($0)
         }
 
-        for url in candidates where FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+        for url in candidates where FileManager.default.fileExists(atPath: url.path) {
             let text = try String(contentsOf: url, encoding: .utf8)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty {

@@ -351,7 +351,7 @@ final class TranscriptionViewModel: ObservableObject {
     private func uniqueURL(in folder: URL, baseName: String, extension fileExtension: String) -> URL {
         var candidate = folder.appendingPathComponent(baseName).appendingPathExtension(fileExtension)
         var counter = 2
-        while FileManager.default.fileExists(atPath: candidate.path(percentEncoded: false)) {
+        while FileManager.default.fileExists(atPath: candidate.path) {
             candidate = folder
                 .appendingPathComponent("\(baseName)-\(counter)")
                 .appendingPathExtension(fileExtension)

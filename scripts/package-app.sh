@@ -1,70 +1,150 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT_DIR"
-
-APP_NAME="Audio to Text using ASR LLM"
-PRODUCT_NAME="AudioToTextASRLLM"
-BUNDLE_ID="dev.han.AudioToTextASRLLM"
-VERSION="1.0.2"
+PRODUCT_NAME="Audio to Text using ASR LLM"
+EXECUTABLE_NAME="AudioToTextASRLLM"
+BUNDLE_IDENTIFIER="dev.han.AudioToTextASRLLM"
+VERSION="1.1.0"
 CONFIGURATION="${1:-release}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
-ARCH_NAME="$(uname -m)"
-FINAL_APP_DIR="$DIST_DIR/Audio-to-Text-using-ASR-LLM-v${VERSION}.app"
-FINAL_ZIP_PATH="$DIST_DIR/Audio-to-Text-using-ASR-LLM-v${VERSION}-macOS-${ARCH_NAME}.zip"
-STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/audio-to-text-asr-llm.XXXXXX")"
-APP_DIR="$STAGE_DIR/$APP_NAME.app"
-VERIFY_DIR="$STAGE_DIR/verify"
+STAGE_DIR="${TMPDIR:-/tmp}/audio-to-text-asr-llm-package.$$"
+APP_DIR="$STAGE_DIR/$PRODUCT_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+ICON_SOURCE="$ROOT_DIR/Resources/AppIcon.icns"
+CLANG_CACHE_DIR="$STAGE_DIR/clang-module-cache"
+ARCH_FLAGS=()
+USE_ARCH_FLAGS=0
 
-cleanup() {
-  rm -rf "$STAGE_DIR"
-}
-trap cleanup EXIT
+cd "$ROOT_DIR"
+mkdir -p "$CLANG_CACHE_DIR"
+export CLANG_MODULE_CACHE_PATH="$CLANG_CACHE_DIR"
+export MACOSX_DEPLOYMENT_TARGET="12.0"
+trap 'rm -rf "$STAGE_DIR"' EXIT
 
 clean_bundle_metadata() {
-  local bundle_dir="$1"
-  find "$bundle_dir" -name "._*" -delete
-  if command -v dot_clean >/dev/null 2>&1; then
-    dot_clean -m "$bundle_dir"
-  fi
-  if command -v xattr >/dev/null 2>&1; then
-    xattr -cr "$bundle_dir" 2>/dev/null || true
-    while IFS= read -r -d '' file_path; do
-      xattr -d com.apple.FinderInfo "$file_path" 2>/dev/null || true
-      xattr -d 'com.apple.fileprovider.fpfs#P' "$file_path" 2>/dev/null || true
-    done < <(find "$bundle_dir" -print0)
-  fi
+    local bundle_dir="${1:-$APP_DIR}"
+    find "$bundle_dir" -name "._*" -delete
+    if command -v dot_clean >/dev/null 2>&1; then
+        dot_clean -m "$bundle_dir"
+    fi
+    if command -v xattr >/dev/null 2>&1; then
+        xattr -cr "$bundle_dir" 2>/dev/null || true
+        while IFS= read -r -d '' file_path; do
+            xattr -d com.apple.FinderInfo "$file_path" 2>/dev/null || true
+            xattr -d 'com.apple.fileprovider.fpfs#P' "$file_path" 2>/dev/null || true
+        done < <(find "$bundle_dir" -print0)
+    fi
 }
 
-mkdir -p "$DIST_DIR"
-rm -rf "$APP_DIR" "$FINAL_APP_DIR" "$FINAL_ZIP_PATH"
+assert_no_user_cache_payload() {
+    local bundle_dir="${1:-$APP_DIR}"
+    if find "$bundle_dir" \( -name "*.sqlite" -o -name "*.json" -o -name "*Cache*" -o -name "*cache*" \) -print -quit | grep -q .; then
+        echo "Refusing to package user cache or generated state inside $bundle_dir" >&2
+        exit 1
+    fi
+}
 
-swift build -c "$CONFIGURATION"
-
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
-cp "Support/Info.plist" "$CONTENTS_DIR/Info.plist"
-cp ".build/$CONFIGURATION/$PRODUCT_NAME" "$MACOS_DIR/$PRODUCT_NAME"
-chmod +x "$MACOS_DIR/$PRODUCT_NAME"
-if [[ -f "Resources/AppIcon.icns" ]]; then
-  cp "Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    ARCH_FLAGS=(--arch arm64 --arch x86_64)
+    USE_ARCH_FLAGS=1
 fi
 
-clean_bundle_metadata "$APP_DIR"
-codesign --force --deep --sign - "$APP_DIR"
-clean_bundle_metadata "$APP_DIR"
-codesign --verify --deep --strict --verbose=2 "$APP_DIR"
+if ! swift build -c "$CONFIGURATION" "${ARCH_FLAGS[@]}"; then
+    echo "Universal build failed; retrying for the current host architecture." >&2
+    ARCH_FLAGS=()
+    USE_ARCH_FLAGS=0
+    swift build -c "$CONFIGURATION"
+fi
 
-ditto -c -k --norsrc --keepParent "$APP_DIR" "$FINAL_ZIP_PATH"
-mkdir -p "$VERIFY_DIR"
-ditto -x -k "$FINAL_ZIP_PATH" "$VERIFY_DIR"
-codesign --verify --deep --strict --verbose=2 "$VERIFY_DIR/$APP_NAME.app"
+if [[ "$USE_ARCH_FLAGS" == "1" ]]; then
+    BINARY_DIR="$(swift build -c "$CONFIGURATION" "${ARCH_FLAGS[@]}" --show-bin-path)"
+else
+    BINARY_DIR="$(swift build -c "$CONFIGURATION" --show-bin-path)"
+fi
+BINARY_PATH="$BINARY_DIR/$EXECUTABLE_NAME"
 
+if [[ ! -x "$BINARY_PATH" ]]; then
+    echo "Built executable not found: $BINARY_PATH" >&2
+    exit 1
+fi
+
+ARCHS="$(lipo -archs "$BINARY_PATH")"
+if [[ "$ARCHS" == *"arm64"* && "$ARCHS" == *"x86_64"* ]]; then
+    ARCH_LABEL="universal"
+elif [[ "$ARCHS" == *"arm64"* ]]; then
+    ARCH_LABEL="arm64"
+else
+    ARCH_LABEL="x86_64"
+fi
+ARTIFACT_BASENAME="Audio-to-Text-using-ASR-LLM-v${VERSION}-macOS-${ARCH_LABEL}"
+FINAL_APP_DIR="$DIST_DIR/${ARTIFACT_BASENAME}.app"
+
+rm -rf "$STAGE_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+cp "$BINARY_PATH" "$MACOS_DIR/$EXECUTABLE_NAME"
+chmod +x "$MACOS_DIR/$EXECUTABLE_NAME"
+if [[ -f "$ICON_SOURCE" ]]; then
+    cp "$ICON_SOURCE" "$RESOURCES_DIR/AppIcon.icns"
+fi
+clean_bundle_metadata
+assert_no_user_cache_payload
+
+cat > "$CONTENTS_DIR/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>$PRODUCT_NAME</string>
+    <key>CFBundleExecutable</key>
+    <string>$EXECUTABLE_NAME</string>
+    <key>CFBundleIdentifier</key>
+    <string>$BUNDLE_IDENTIFIER</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$PRODUCT_NAME</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$VERSION</string>
+    <key>CFBundleVersion</key>
+    <string>4</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>12.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSSupportsAutomaticTermination</key>
+    <false/>
+</dict>
+</plist>
+PLIST
+
+if command -v codesign >/dev/null 2>&1; then
+    clean_bundle_metadata
+    assert_no_user_cache_payload
+    codesign --force --deep --sign - "$APP_DIR" >/dev/null
+    clean_bundle_metadata
+    assert_no_user_cache_payload
+    codesign --verify --deep --strict "$APP_DIR"
+fi
+
+mkdir -p "$DIST_DIR"
+rm -rf "$FINAL_APP_DIR"
 ditto --norsrc "$APP_DIR" "$FINAL_APP_DIR"
 clean_bundle_metadata "$FINAL_APP_DIR"
-codesign --verify --deep "$FINAL_APP_DIR"
-echo "Packaged:"
-ls -lh "$FINAL_APP_DIR" "$FINAL_ZIP_PATH"
+assert_no_user_cache_payload "$FINAL_APP_DIR"
+if command -v codesign >/dev/null 2>&1; then
+    codesign --verify --deep "$FINAL_APP_DIR"
+fi
+
+echo "$FINAL_APP_DIR"

@@ -1,6 +1,7 @@
 .DS_Store
 .build/
 dist/
+Resources/AppIcon.iconset/
 DerivedData/
 *.xcodeproj
 *.xcworkspace

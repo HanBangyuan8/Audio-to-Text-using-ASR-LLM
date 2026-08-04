@@ -4,72 +4,34 @@ import Foundation
 
 let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 let resources = root.appendingPathComponent("Resources", isDirectory: true)
-let iconset = FileManager.default.temporaryDirectory
-    .appendingPathComponent("AudioToTextASRLLM-AppIcon.iconset", isDirectory: true)
-let pngURL = resources.appendingPathComponent("AppIcon.png")
-let icnsURL = resources.appendingPathComponent("AppIcon.icns")
+let iconset = resources.appendingPathComponent("AppIcon.iconset", isDirectory: true)
+let output = resources.appendingPathComponent("AppIcon.icns")
+let readmePreview = resources.appendingPathComponent("AppIcon.png")
+let fileManager = FileManager.default
 
-try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
-try? FileManager.default.removeItem(at: iconset)
-try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
+try fileManager.createDirectory(at: resources, withIntermediateDirectories: true)
+try? fileManager.removeItem(at: iconset)
+try fileManager.createDirectory(at: iconset, withIntermediateDirectories: true)
 
-func drawIcon(size: CGFloat) -> NSImage {
-    let scale = size / 1024
-    let iconFrame = NSRect(x: 96 * scale, y: 96 * scale, width: 832 * scale, height: 832 * scale)
-    let image = NSImage(size: NSSize(width: size, height: size))
-    image.lockFocus()
+let variants: [(Int, String)] = [
+    (16, "icon_16x16.png"),
+    (32, "icon_16x16@2x.png"),
+    (32, "icon_32x32.png"),
+    (64, "icon_32x32@2x.png"),
+    (128, "icon_128x128.png"),
+    (256, "icon_128x128@2x.png"),
+    (256, "icon_256x256.png"),
+    (512, "icon_256x256@2x.png"),
+    (512, "icon_512x512.png"),
+    (1024, "icon_512x512@2x.png")
+]
 
-    NSColor.clear.setFill()
-    NSRect(x: 0, y: 0, width: size, height: size).fill()
-
-    let bgPath = NSBezierPath(roundedRect: iconFrame, xRadius: 198 * scale, yRadius: 198 * scale)
-    let gradient = NSGradient(colors: [
-        NSColor(red: 0.38, green: 0.43, blue: 0.96, alpha: 1),
-        NSColor(red: 0.09, green: 0.55, blue: 0.62, alpha: 1),
-        NSColor(red: 0.07, green: 0.11, blue: 0.19, alpha: 1)
-    ])!
-    gradient.draw(in: bgPath, angle: -36)
-
-    func capsule(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, alpha: CGFloat = 1) {
-        let path = NSBezierPath(
-            roundedRect: NSRect(x: x * scale, y: y * scale, width: width * scale, height: height * scale),
-            xRadius: height * scale / 2,
-            yRadius: height * scale / 2
-        )
-        NSColor.white.withAlphaComponent(alpha).setFill()
-        path.fill()
-    }
-
-    NSGraphicsContext.saveGraphicsState()
-    let transform = NSAffineTransform()
-    transform.translateX(by: size / 2, yBy: size / 2)
-    transform.scale(by: 0.94)
-    transform.translateX(by: -size / 2, yBy: -size / 2)
-    transform.concat()
-
-    // Audio bars, progressively resolving into text lines.
-    capsule(x: 268, y: 432, width: 42, height: 160, alpha: 0.92)
-    capsule(x: 336, y: 360, width: 42, height: 304, alpha: 1.00)
-    capsule(x: 404, y: 410, width: 42, height: 204, alpha: 0.94)
-    capsule(x: 472, y: 386, width: 42, height: 252, alpha: 0.86)
-
-    capsule(x: 570, y: 598, width: 210, height: 46, alpha: 1.00)
-    capsule(x: 570, y: 489, width: 270, height: 46, alpha: 0.88)
-    capsule(x: 570, y: 380, width: 190, height: 46, alpha: 0.72)
-
-    // A small quiet connector keeps the conversion readable without becoming an arrow.
-    capsule(x: 524, y: 489, width: 38, height: 46, alpha: 0.78)
-
-    NSGraphicsContext.restoreGraphicsState()
-    image.unlockFocus()
-    return image
-}
-
-func writePNG(_ image: NSImage, to url: URL, pixels: Int) throws {
+func writeIcon(size: Int, name: String) throws {
+    let rect = NSRect(x: 0, y: 0, width: size, height: size)
     guard let bitmap = NSBitmapImageRep(
         bitmapDataPlanes: nil,
-        pixelsWide: pixels,
-        pixelsHigh: pixels,
+        pixelsWide: size,
+        pixelsHigh: size,
         bitsPerSample: 8,
         samplesPerPixel: 4,
         hasAlpha: true,
@@ -78,61 +40,96 @@ func writePNG(_ image: NSImage, to url: URL, pixels: Int) throws {
         bytesPerRow: 0,
         bitsPerPixel: 0
     ) else {
-        throw NSError(domain: "IconGeneration", code: 1)
-    }
-
-    bitmap.size = NSSize(width: pixels, height: pixels)
-    guard let context = NSGraphicsContext(bitmapImageRep: bitmap) else {
-        throw NSError(domain: "IconGeneration", code: 2)
+        throw NSError(domain: "AppIcon", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to allocate bitmap \(name)"])
     }
 
     NSGraphicsContext.saveGraphicsState()
-    NSGraphicsContext.current = context
-    image.draw(
-        in: NSRect(x: 0, y: 0, width: pixels, height: pixels),
-        from: NSRect(x: 0, y: 0, width: image.size.width, height: image.size.height),
-        operation: .sourceOver,
-        fraction: 1
-    )
-    context.flushGraphics()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+    NSGraphicsContext.current?.cgContext.clear(CGRect(x: 0, y: 0, width: size, height: size))
+
+    let iconMargin = CGFloat(size) * (96.0 / 1024.0)
+    let corner = CGFloat(size) * 0.19
+    let bodyRect = rect.insetBy(dx: iconMargin, dy: iconMargin)
+    let body = NSBezierPath(roundedRect: bodyRect, xRadius: corner, yRadius: corner)
+    NSGradient(colors: [
+        NSColor(calibratedRed: 0.38, green: 0.43, blue: 0.96, alpha: 1),
+        NSColor(calibratedRed: 0.09, green: 0.55, blue: 0.62, alpha: 1),
+        NSColor(calibratedRed: 0.07, green: 0.11, blue: 0.19, alpha: 1)
+    ])?.draw(in: body, angle: 144)
+
+    NSColor.white.withAlphaComponent(0.20).setStroke()
+    body.lineWidth = max(1, CGFloat(size) * 0.012)
+    body.stroke()
+
+    let contentRect = bodyRect.insetBy(dx: CGFloat(size) * 0.17, dy: CGFloat(size) * 0.20)
+    let unit = CGFloat(size) / 1024.0
+
+    func capsule(_ rect: NSRect, alpha: CGFloat = 1) {
+        let path = NSBezierPath(roundedRect: rect, xRadius: rect.height / 2, yRadius: rect.height / 2)
+        NSColor.white.withAlphaComponent(alpha).setFill()
+        path.fill()
+    }
+
+    let barWidth = 42 * unit
+    let barX = contentRect.minX
+    let centerY = contentRect.midY
+    capsule(NSRect(x: barX, y: centerY - 80 * unit, width: barWidth, height: 160 * unit), alpha: 0.92)
+    capsule(NSRect(x: barX + 68 * unit, y: centerY - 152 * unit, width: barWidth, height: 304 * unit))
+    capsule(NSRect(x: barX + 136 * unit, y: centerY - 102 * unit, width: barWidth, height: 204 * unit), alpha: 0.94)
+    capsule(NSRect(x: barX + 204 * unit, y: centerY - 126 * unit, width: barWidth, height: 252 * unit), alpha: 0.86)
+
+    let textX = contentRect.minX + contentRect.width * 0.57
+    let lineHeight = 46 * unit
+    capsule(NSRect(x: textX, y: centerY + 86 * unit, width: contentRect.maxX - textX, height: lineHeight))
+    capsule(NSRect(x: textX, y: centerY - 23 * unit, width: contentRect.maxX - textX, height: lineHeight), alpha: 0.88)
+    capsule(NSRect(x: textX, y: centerY - 132 * unit, width: (contentRect.maxX - textX) * 0.72, height: lineHeight), alpha: 0.72)
+    capsule(NSRect(x: contentRect.minX + contentRect.width * 0.49, y: centerY - 23 * unit, width: 38 * unit, height: lineHeight), alpha: 0.78)
+
     NSGraphicsContext.restoreGraphicsState()
 
-    guard let data = bitmap.representation(using: .png, properties: [:]) else {
-        throw NSError(domain: "IconGeneration", code: 3)
+    guard let png = bitmap.representation(using: .png, properties: [:]) else {
+        throw NSError(domain: "AppIcon", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unable to render icon \(name)"])
     }
-    try data.write(to: url)
+    try png.write(to: iconset.appendingPathComponent(name))
 }
 
-let baseImage = drawIcon(size: 1024)
-try writePNG(baseImage, to: pngURL, pixels: 1024)
+for variant in variants {
+    try writeIcon(size: variant.0, name: variant.1)
+}
 
-let iconFiles: [(String, CGFloat)] = [
-    ("icon_16x16.png", 16),
-    ("icon_16x16@2x.png", 32),
-    ("icon_32x32.png", 32),
-    ("icon_32x32@2x.png", 64),
-    ("icon_128x128.png", 128),
-    ("icon_128x128@2x.png", 256),
-    ("icon_256x256.png", 256),
-    ("icon_256x256@2x.png", 512),
-    ("icon_512x512.png", 512),
-    ("icon_512x512@2x.png", 1024)
+try? fileManager.removeItem(at: output)
+try? fileManager.removeItem(at: readmePreview)
+try fileManager.copyItem(at: iconset.appendingPathComponent("icon_512x512@2x.png"), to: readmePreview)
+
+let icnsChunks: [(String, String)] = [
+    ("icp4", "icon_16x16.png"),
+    ("ic11", "icon_16x16@2x.png"),
+    ("icp5", "icon_32x32.png"),
+    ("ic12", "icon_32x32@2x.png"),
+    ("ic07", "icon_128x128.png"),
+    ("ic13", "icon_128x128@2x.png"),
+    ("ic08", "icon_256x256.png"),
+    ("ic14", "icon_256x256@2x.png"),
+    ("ic09", "icon_512x512.png"),
+    ("ic10", "icon_512x512@2x.png")
 ]
 
-for (name, size) in iconFiles {
-    try writePNG(drawIcon(size: size), to: iconset.appendingPathComponent(name), pixels: Int(size))
+func appendBigEndian(_ value: UInt32, to data: inout Data) {
+    var bigEndian = value.bigEndian
+    withUnsafeBytes(of: &bigEndian) { data.append(contentsOf: $0) }
 }
 
-try? FileManager.default.removeItem(at: icnsURL)
-let process = Process()
-process.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
-process.arguments = ["-c", "icns", iconset.path, "-o", icnsURL.path]
-try process.run()
-process.waitUntilExit()
-guard process.terminationStatus == 0 else {
-    throw NSError(domain: "IconGeneration", code: Int(process.terminationStatus))
+var chunks = Data()
+for (type, fileName) in icnsChunks {
+    let png = try Data(contentsOf: iconset.appendingPathComponent(fileName))
+    chunks.append(type.data(using: .ascii)!)
+    appendBigEndian(UInt32(png.count + 8), to: &chunks)
+    chunks.append(png)
 }
-try? FileManager.default.removeItem(at: iconset)
 
-print("Generated \(pngURL.path)")
-print("Generated \(icnsURL.path)")
+var icns = Data("icns".utf8)
+appendBigEndian(UInt32(chunks.count + 8), to: &icns)
+icns.append(chunks)
+try icns.write(to: output, options: .atomic)
+
+print(output.path)

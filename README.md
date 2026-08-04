@@ -1,6 +1,6 @@
 # Audio to Text using ASR LLM
 
-![macOS](https://img.shields.io/badge/macOS-13%2B-blue?style=flat)
+![macOS](https://img.shields.io/badge/macOS-12%2B-blue?style=flat)
 ![Xcode](https://img.shields.io/badge/Xcode-15%2B-147EFB?style=flat)
 ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange?style=flat)
 ![GitHub release](https://img.shields.io/github/v/release/HanBangyuan8/Audio-to-Text-using-ASR-LLM?style=flat)
@@ -31,7 +31,7 @@ A native macOS SwiftUI app for high-accuracy multilingual audio transcription wi
 ### Latest Version
 
 - Apple M chips and Intel processors
-- Runtime requirement: macOS 13+
+- Runtime requirement: macOS 12+
 - Xcode 15+ or Swift 5.9+
 - An OpenAI-compatible ASR API, multimodal LLM gateway, or local ASR command-line runner
 
@@ -81,14 +81,14 @@ swift run AudioToTextASRLLM
 ## Package
 
 ```bash
-./scripts/package-app.sh
-open "dist/Audio to Text using ASR LLM.app"
+./scripts/package-dmg.sh
+open "dist/Audio-to-Text-using-ASR-LLM-v1.1.0-macOS-universal.app"
 ```
 
-The package script creates a signed ad-hoc macOS `.app` and a versioned zip archive:
+The package script creates a signed ad-hoc universal macOS `.app`, a versioned zip archive, and a DMG image:
 
 ```text
-dist/Audio-to-Text-using-ASR-LLM-v1.0.2-macOS-arm64.zip
+dist/Audio-to-Text-using-ASR-LLM-v1.1.0-macOS-universal.zip
 ```
 
 ## Data Location

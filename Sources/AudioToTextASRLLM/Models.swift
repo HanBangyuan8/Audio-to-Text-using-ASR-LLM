@@ -257,7 +257,7 @@ struct AudioFile: Identifiable, Codable, Hashable, Sendable {
     let url: URL
 
     var name: String { url.lastPathComponent }
-    var path: String { url.path(percentEncoded: false) }
+    var path: String { url.path }
 }
 
 struct TranscriptSegment: Codable, Hashable, Identifiable, Sendable {

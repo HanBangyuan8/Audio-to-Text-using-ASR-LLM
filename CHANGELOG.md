@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.2.0 - 2026-08-04
+
+Major release.
+
+- Added a cached queue index and platform-aware task and transcript rendering budgets.
+- Moved configuration and queue persistence into debounced background workers.
+- Isolated native provider controls and long task or segment lists from inherited page animations.
+- Made the overview task list consume the exact remaining detail height without bottom clipping or unused space.
+- Rebuilt provider settings as a single-column, height-budgeted native layout with no page-level scrolling.
+- Removed page-level scrolling from overview, provider, and transcript pages while retaining local scrolling for task rows and long transcript data.
+- Reset each launch to the minimum 1100 × 760 native window size, with a 1010 × 760 macOS 12 compatibility size.
+- Reduced repeated queue filtering, view invalidation, and disk activity during transcription.
+- Preserved the existing native interface, accent behavior, and versioned motion design.
+
 ## v1.1.0
 
 Major release.

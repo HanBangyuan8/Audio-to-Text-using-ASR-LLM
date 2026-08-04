@@ -200,12 +200,13 @@ final class ASRAppDelegate: NSObject, NSApplicationDelegate {
         let hostingController = NSHostingController(rootView: rootView)
         let styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1180, height: 820),
+            contentRect: NSRect(x: 0, y: 0, width: 1010, height: 760),
             styleMask: styleMask,
             backing: .buffered,
             defer: false
         )
         window.title = "Audio to Text using ASR LLM"
+        window.contentMinSize = NSSize(width: 1010, height: 760)
         window.toolbarStyle = .unified
         window.center()
         window.isReleasedWhenClosed = false
@@ -289,7 +290,6 @@ private struct ASRNativeContentView: View {
                 profile: profile,
                 accentColor: accentColor,
                 pageTransition: pageTransition,
-                interfaceAnimation: interfaceAnimation,
                 showsInlineActions: false
             )
             .navigationTitle("ASR Transcription")
@@ -389,7 +389,6 @@ private struct ASRCompatibilityContentView: View {
                 profile: profile,
                 accentColor: accentColor,
                 pageTransition: pageTransition,
-                interfaceAnimation: interfaceAnimation,
                 showsInlineActions: true
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -493,7 +492,7 @@ private struct ASRSidebar: View {
             }
 
             Section("Status") {
-                SidebarStatusRow(title: "Files") { Text("\(viewModel.records.count)").monospacedDigit() }
+                SidebarStatusRow(title: "Files") { Text("\(viewModel.queueSummary.total)").monospacedDigit() }
                 SidebarStatusRow(title: "Completed") { Text("\(count(.complete))").monospacedDigit() }
                 SidebarStatusRow(title: "Queued") { Text("\(count(.queued))").monospacedDigit() }
                 SidebarStatusRow(title: "Queue") { Text(viewModel.isTranscribing ? "Running" : "Ready") }
@@ -504,7 +503,7 @@ private struct ASRSidebar: View {
         .listStyle(.sidebar)
     }
 
-    private func count(_ status: TranscriptionStatus) -> Int { viewModel.records.filter { $0.status == status }.count }
+    private func count(_ status: TranscriptionStatus) -> Int { viewModel.queueSummary.count(for: status) }
     private func filePage(_ id: UUID) -> String { "file:\(id.uuidString)" }
 
     private func pageButton(_ title: String, systemImage: String, page: String) -> some View {
@@ -518,11 +517,11 @@ private struct ASRSidebar: View {
         .buttonStyle(pageStyle(selected: selectedPage == page))
     }
 
-    private func pageStyle(selected: Bool) -> ASRAnyButtonStyle {
+    private func pageStyle(selected: Bool) -> AnyButtonStyle {
         if nativeNavigation {
-            return ASRAnyButtonStyle(VersionedPagePressButtonStyle(isSelected: selected, accentColor: accentColor, profile: profile))
+            return AnyButtonStyle(VersionedPagePressButtonStyle(isSelected: selected, accentColor: accentColor, profile: profile))
         }
-        return ASRAnyButtonStyle(Legacy15SidebarButtonStyle(isSelected: selected, accentColor: accentColor))
+        return AnyButtonStyle(Legacy15SidebarButtonStyle(isSelected: selected, accentColor: accentColor))
     }
 
     private func statusColor(_ status: TranscriptionStatus) -> Color {
@@ -536,12 +535,6 @@ private struct ASRSidebar: View {
     }
 }
 
-private struct ASRAnyButtonStyle: ButtonStyle {
-    private let bodyBuilder: (Configuration) -> AnyView
-    init<S: ButtonStyle>(_ style: S) { bodyBuilder = { AnyView(style.makeBody(configuration: $0)) } }
-    func makeBody(configuration: Configuration) -> some View { bodyBuilder(configuration) }
-}
-
 private struct ASRDetailRouter: View {
     @ObservedObject var viewModel: TranscriptionViewModel
     let selectedPage: String
@@ -549,53 +542,57 @@ private struct ASRDetailRouter: View {
     let profile: VersionedMotionProfile
     let accentColor: Color
     let pageTransition: AnyTransition
-    let interfaceAnimation: Animation?
     let showsInlineActions: Bool
 
     var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                if showsInlineActions {
-                    ASRActionStrip(viewModel: viewModel, accentColor: accentColor)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                }
-                Group {
-                    if selectedPage == "provider" {
-                        ASRProviderSettingsPage(viewModel: viewModel, profile: profile, accentColor: accentColor)
+        VStack(spacing: 0) {
+            if showsInlineActions {
+                ASRActionStrip(viewModel: viewModel, accentColor: accentColor)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+            }
+
+            GeometryReader { geometry in
+                if selectedPage == "provider" {
+                    ASRProviderSettingsPage(
+                        viewModel: viewModel,
+                        profile: profile,
+                        accentColor: accentColor,
+                        availableHeight: geometry.size.height
+                    )
                     .padding(20)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .id(selectedPage)
                     .transition(pageTransition)
                     .versionedPageSwitchMotion(profile: profile, pageID: selectedPage, direction: navigationDirection)
                     .coordinateSpace(name: "detailScroll")
-                    } else if selectedPage.hasPrefix("file:") {
-                        ASRTranscriptPage(viewModel: viewModel, profile: profile, accentColor: accentColor, pageID: selectedPage, direction: navigationDirection)
+                } else if selectedPage.hasPrefix("file:") {
+                    ASRTranscriptPage(
+                        viewModel: viewModel,
+                        profile: profile,
+                        accentColor: accentColor,
+                        pageID: selectedPage,
+                        direction: navigationDirection
+                    )
                     .padding(20)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .id(selectedPage)
                     .transition(pageTransition)
                     .versionedPageSwitchMotion(profile: profile, pageID: selectedPage, direction: navigationDirection)
                     .coordinateSpace(name: "detailScroll")
-                    } else {
-                        ScrollViewReader { scrollProxy in
-                            ScrollView {
-                                Color.clear.frame(height: 0).id("detailTop")
-                                ASROverviewPage(viewModel: viewModel, profile: profile, accentColor: accentColor, direction: navigationDirection)
-                                    .padding(20)
-                                    .id(selectedPage)
-                                    .transition(pageTransition)
-                            }
-                            .versionedPageSwitchMotion(profile: profile, pageID: selectedPage, direction: navigationDirection)
-                            .coordinateSpace(name: "detailScroll")
-                            .onChange(of: selectedPage) { _ in
-                                withAnimation(interfaceAnimation) { scrollProxy.scrollTo("detailTop", anchor: .top) }
-                            }
-                            .onAppear {
-                                scrollProxy.scrollTo("detailTop", anchor: .top)
-                            }
-                        }
-                    }
+                } else {
+                    ASROverviewPage(
+                        viewModel: viewModel,
+                        profile: profile,
+                        accentColor: accentColor,
+                        direction: navigationDirection
+                    )
+                    .padding(20)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .id(selectedPage)
+                    .transition(pageTransition)
+                    .versionedPageSwitchMotion(profile: profile, pageID: selectedPage, direction: navigationDirection)
+                    .coordinateSpace(name: "detailScroll")
                 }
             }
         }
@@ -673,8 +670,8 @@ private struct ASROverviewPage: View {
                 .font(.title2.bold())
                 .versionedComponentAppear(profile: profile, pageID: "overview", direction: direction)
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 12)], spacing: 12) {
-                StatCard(title: "Files", value: "\(viewModel.records.count)", compact: true)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 120), spacing: 12), count: 5), spacing: 12) {
+                StatCard(title: "Files", value: "\(viewModel.queueSummary.total)", compact: true)
                 StatCard(title: "Queued", value: "\(count(.queued))", compact: true)
                 StatCard(title: "Running", value: "\(count(.running))", compact: true)
                 StatCard(title: "Completed", value: "\(count(.complete))", compact: true)
@@ -685,14 +682,15 @@ private struct ASROverviewPage: View {
             Text("Recent Tasks").font(.title3.bold())
                 .versionedComponentAppear(profile: profile, pageID: "overview", direction: direction)
             ASRTaskList(viewModel: viewModel, accentColor: accentColor)
-                .frame(minHeight: 360)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .interactivePanel(cornerRadius: 16, accentColor: accentColor)
                 .versionedComponentAppear(profile: profile, pageID: "overview", direction: direction)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func count(_ status: TranscriptionStatus) -> Int { viewModel.records.filter { $0.status == status }.count }
+    private func count(_ status: TranscriptionStatus) -> Int { viewModel.queueSummary.count(for: status) }
 }
 
 private struct ASRTaskList: View {
@@ -728,7 +726,7 @@ private struct ASRTaskList: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(viewModel.records) { record in
+                        ForEach(viewModel.visibleRecords) { record in
                             Button {
                                 viewModel.selectedRecordID = record.id
                             } label: {
@@ -766,9 +764,13 @@ private struct ASRTaskList: View {
                             Divider()
                         }
                     }
+                    .transaction { transaction in
+                        transaction.animation = nil
+                    }
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func header(_ value: String) -> some View { Text(value).font(.caption.weight(.semibold)).foregroundStyle(.secondary) }
@@ -787,36 +789,67 @@ private struct ASRProviderSettingsPage: View {
     @ObservedObject var viewModel: TranscriptionViewModel
     let profile: VersionedMotionProfile
     let accentColor: Color
+    var availableHeight: CGFloat? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Provider Settings").font(.title2.bold())
                 .versionedComponentAppear(profile: profile, pageID: "provider", direction: .unchanged)
-            ScrollViewReader { scrollProxy in
-                ScrollView {
-                    Color.clear
-                        .frame(height: 0)
-                        .id("providerTop")
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        settingsSection("Provider", index: 0) { providerRows }
-                        settingsSection("Recognition", index: 1) { recognitionRows }
-                        settingsSection("Reliability", index: 2) { reliabilityRows }
-                        settingsSection("Advanced", index: 3) { advancedRows }
-                    }
-                }
-                .onAppear {
-                    scrollProxy.scrollTo("providerTop", anchor: .top)
-                }
-            }
+            ASRProviderSettingsPanel(
+                viewModel: viewModel,
+                accentColor: accentColor,
+                availableHeight: availableHeight
+            )
             .versionedComponentAppear(profile: profile, pageID: "provider", direction: .unchanged)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+}
+
+private struct ASRProviderSettingsPanel: View {
+    @ObservedObject var viewModel: TranscriptionViewModel
+    let accentColor: Color
+    var availableHeight: CGFloat? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var settingsAnimation: Animation? {
+        reduceMotion ? nil : MotionTokens.soft
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let viewportHeight = max(0, (availableHeight ?? geometry.size.height) - 78)
+            let panelHeight = min(geometry.size.height, viewportHeight)
+            settingsRows(editorHeight: editorHeight(for: panelHeight))
+        }
+    }
+
+    private func settingsRows(editorHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            settingsSection("Provider", index: 0) { providerRows }
+            settingsSection("Recognition", index: 1) { recognitionRows(editorHeight: editorHeight) }
+            settingsSection("Reliability", index: 2) { reliabilityRows }
+            settingsSection("Advanced", index: 3) { advancedRows(editorHeight: editorHeight) }
+        }
+        .animation(settingsAnimation, value: viewModel.configuration.backend)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func editorHeight(for panelHeight: CGFloat) -> CGFloat {
+        let hasConditionalSettingsRow = viewModel.configuration.backend == .apiChatAudio
+            || viewModel.configuration.backend == .apiCustomJSON
+        let fixedContentHeight: CGFloat = hasConditionalSettingsRow ? 646 : 624
+        let bottomPadding: CGFloat = 4
+        let editorCount: CGFloat = viewModel.configuration.backend == .apiCustomJSON
+            || viewModel.configuration.backend == .localCommand ? 4 : 3
+        return max(26, (panelHeight - fixedContentHeight - bottomPadding) / editorCount)
+    }
 
     private func settingsSection<Content: View>(_ title: String, index: Int, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text(title).font(.headline.weight(.semibold)).foregroundStyle(.secondary)
+            Text(title)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 8) { content() }
                 .settingsSolidCard(accentColor: accentColor)
         }
@@ -866,7 +899,7 @@ private struct ASRProviderSettingsPage: View {
         }
     }
 
-    private var recognitionRows: some View {
+    private func recognitionRows(editorHeight: CGFloat) -> some View {
         Group {
             SettingsRow(title: "Language Hint") { TextField("e.g. zh, en, ja", text: $viewModel.configuration.language) }
             SettingsRow(title: "Response") {
@@ -878,11 +911,14 @@ private struct ASRProviderSettingsPage: View {
             SettingsRow(title: "Temperature") {
                 HStack {
                     Slider(value: $viewModel.configuration.temperature, in: 0...1, step: 0.05)
+                        .transaction { transaction in
+                            transaction.animation = nil
+                        }
                     Text("\(viewModel.configuration.temperature, specifier: "%.2f")").monospacedDigit().frame(width: 52, alignment: .trailing)
                 }
             }
             SettingsRow(title: "Prompt") {
-                editor(text: $viewModel.configuration.prompt, placeholder: "Glossary, speaker names, product names, and formatting preferences", height: 88)
+                editor(text: $viewModel.configuration.prompt, placeholder: "Glossary, speaker names, product names, and formatting preferences", height: editorHeight)
             }
         }
     }
@@ -895,30 +931,36 @@ private struct ASRProviderSettingsPage: View {
             SettingsRow(title: "Timeout") {
                 HStack {
                     Slider(value: $viewModel.configuration.requestTimeout, in: 30...3600, step: 30)
+                        .transaction { transaction in
+                            transaction.animation = nil
+                        }
                     Text("\(Int(viewModel.configuration.requestTimeout)) s").monospacedDigit().frame(width: 72, alignment: .trailing)
                 }
             }
         }
     }
 
-    private var advancedRows: some View {
+    private func advancedRows(editorHeight: CGFloat) -> some View {
         Group {
             if viewModel.configuration.backend == .apiCustomJSON {
                 SettingsRow(title: "Response Path") { TextField("choices.0.message.content", text: $viewModel.configuration.responseTextPath) }
-                SettingsRow(title: "JSON Template") { editor(text: $viewModel.configuration.customJSONTemplate, placeholder: "Custom JSON body", height: 150, monospaced: true) }
+                SettingsRow(title: "JSON Template") { editor(text: $viewModel.configuration.customJSONTemplate, placeholder: "Custom JSON body", height: editorHeight, monospaced: true) }
             }
             if viewModel.configuration.backend == .localCommand {
-                SettingsRow(title: "Local Command") { editor(text: $viewModel.configuration.localCommandTemplate, placeholder: "Command template", height: 96, monospaced: true) }
+                SettingsRow(title: "Local Command") { editor(text: $viewModel.configuration.localCommandTemplate, placeholder: "Command template", height: editorHeight, monospaced: true) }
             }
-            SettingsRow(title: "HTTP Headers") { editor(text: $viewModel.configuration.customHeaders, placeholder: "Header: value", height: 62, monospaced: true).disabled(viewModel.configuration.backend == .localCommand) }
-            SettingsRow(title: "Multipart Fields") { editor(text: $viewModel.configuration.extraFields, placeholder: "key=value", height: 84, monospaced: true) }
+            SettingsRow(title: "HTTP Headers") { editor(text: $viewModel.configuration.customHeaders, placeholder: "Header: value", height: editorHeight, monospaced: true).disabled(viewModel.configuration.backend == .localCommand) }
+            SettingsRow(title: "Multipart Fields") { editor(text: $viewModel.configuration.extraFields, placeholder: "key=value", height: editorHeight, monospaced: true) }
         }
     }
 
     private func editor(text: Binding<String>, placeholder: String, height: CGFloat, monospaced: Bool = false) -> some View {
         TextEditor(text: text)
             .font(monospaced ? .system(.body, design: .monospaced) : .body)
-            .frame(minHeight: height)
+            .frame(height: height)
+            .transaction { transaction in
+                transaction.animation = nil
+            }
             .overlay(alignment: .topLeading) {
                 if text.wrappedValue.isEmpty {
                     Text(placeholder).foregroundStyle(.tertiary).padding(.top, 8).padding(.leading, 5).allowsHitTesting(false)
@@ -935,104 +977,151 @@ private struct ASRTranscriptPage: View {
     let direction: PageNavigationDirection
 
     var body: some View {
-        ScrollViewReader { scrollProxy in
-            ScrollView {
-                Color.clear
-                    .frame(height: 0)
-                    .id("transcriptTop")
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(viewModel.selectedRecord?.file.name ?? "No Transcript Selected").font(.title2.bold()).lineLimit(1)
+                    Text(viewModel.selectedRecord?.file.path ?? "Add an audio file to begin")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
 
-                VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(viewModel.selectedRecord?.file.name ?? "No Transcript Selected").font(.title2.bold()).lineLimit(1)
-                        Text(viewModel.selectedRecord?.file.path ?? "Add an audio file to begin")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                HStack(spacing: 8) {
+                    Picker("Export", selection: $viewModel.exportFormat) {
+                        ForEach(TextExportFormat.allCases) { Text($0.label).tag($0) }
                     }
+                    .frame(width: 150)
+                    Button("Export", action: viewModel.exportSelectedResult).disabled(viewModel.selectedRecord?.result == nil)
+                    Button("Copy", action: viewModel.copySelectedTranscript).disabled(viewModel.selectedRecord?.result == nil)
+                    Menu("More") {
+                        Button("Reveal Audio File", action: viewModel.revealSelectedAudioFile)
+                        Button("Remove from Queue", role: .destructive, action: viewModel.removeSelectedRecord)
+                            .disabled(viewModel.isTranscribing)
+                    }
+                    .disabled(viewModel.selectedRecord == nil)
+                    Spacer()
+                    if let record = viewModel.selectedRecord {
+                        Label(record.status.label, systemImage: record.status.symbolName)
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(statusColor(record.status))
+                    }
+                }
+            }
+            .versionedComponentAppear(profile: profile, pageID: pageID, direction: direction)
 
-                    HStack(spacing: 8) {
-                        Picker("Export", selection: $viewModel.exportFormat) {
-                            ForEach(TextExportFormat.allCases) { Text($0.label).tag($0) }
-                        }
-                        .frame(width: 150)
-                        Button("Export", action: viewModel.exportSelectedResult).disabled(viewModel.selectedRecord?.result == nil)
-                        Button("Copy", action: viewModel.copySelectedTranscript).disabled(viewModel.selectedRecord?.result == nil)
-                        Menu("More") {
-                            Button("Reveal Audio File", action: viewModel.revealSelectedAudioFile)
-                            Button("Remove from Queue", role: .destructive, action: viewModel.removeSelectedRecord)
-                                .disabled(viewModel.isTranscribing)
-                        }
-                        .disabled(viewModel.selectedRecord == nil)
-                        Spacer()
-                        if let record = viewModel.selectedRecord {
-                            Label(record.status.label, systemImage: record.status.symbolName)
-                                .font(.footnote.weight(.medium))
-                                .foregroundStyle(statusColor(record.status))
-                        }
-                    }
+            if let record = viewModel.selectedRecord {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 170), spacing: 12), count: 3), spacing: 12) {
+                    StatCard(title: "Status", value: record.status.label, compact: true)
+                    StatCard(title: "Model", value: record.result?.model ?? viewModel.configuration.model, compact: true)
+                    StatCard(title: "Segments", value: "\(record.result?.segments.count ?? 0)", compact: true)
                 }
                 .versionedComponentAppear(profile: profile, pageID: pageID, direction: direction)
 
-                if let record = viewModel.selectedRecord {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], spacing: 12) {
-                        StatCard(title: "Status", value: record.status.label, compact: true)
-                        StatCard(title: "Model", value: record.result?.model ?? viewModel.configuration.model, compact: true)
-                        StatCard(title: "Segments", value: "\(record.result?.segments.count ?? 0)", compact: true)
-                    }
-                    .versionedComponentAppear(profile: profile, pageID: pageID, direction: direction)
+                transcriptBody(record)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                transcriptPanel("Transcript Preview") {
+                    transcriptPlaceholder
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
 
-                    if let error = record.errorMessage {
-                        transcriptSection("Error") { Text(error).foregroundStyle(.red).textSelection(.enabled) }
-                    } else if let result = record.result {
-                        transcriptSection("Transcript Preview") {
-                            Text(result.text).font(.system(.body, design: .serif)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        if !result.segments.isEmpty {
-                            transcriptSection("Segments") {
-                                LazyVStack(alignment: .leading, spacing: 10) {
-                                    ForEach(result.segments) { segment in
-                                        HStack(alignment: .firstTextBaseline, spacing: 12) {
-                                            Text(timeRange(segment)).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary).frame(width: 150, alignment: .leading)
-                                            Text(segment.text).textSelection(.enabled)
-                                        }
-                                        Divider()
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        transcriptSection("Transcript Preview") {
-                            VStack(spacing: 8) {
-                                Image(systemName: "doc.text.magnifyingglass").font(.largeTitle)
-                                Text("Completed transcriptions will appear here.").font(.footnote)
-                            }
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 240)
-                        }
+    @ViewBuilder
+    private func transcriptBody(_ record: TranscriptionRecord) -> some View {
+        if let error = record.errorMessage {
+            transcriptPanel("Error") {
+                ScrollView {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        } else if let result = record.result {
+            GeometryReader { geometry in
+                if result.segments.isEmpty {
+                    transcriptPreview(result.text)
+                } else if geometry.size.width >= 720 {
+                    HStack(alignment: .top, spacing: 12) {
+                        transcriptPreview(result.text)
+                        transcriptSegments(result.segments)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        transcriptPreview(result.text)
+                        transcriptSegments(result.segments)
                     }
                 }
-                }
             }
-            .onAppear {
-                scrollProxy.scrollTo("transcriptTop", anchor: .top)
-            }
-            .onChange(of: pageID) { _ in
-                scrollProxy.scrollTo("transcriptTop", anchor: .top)
+        } else {
+            transcriptPanel("Transcript Preview") {
+                transcriptPlaceholder
             }
         }
     }
 
-    private func transcriptSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func transcriptPreview(_ text: String) -> some View {
+        transcriptPanel("Transcript Preview") {
+            ScrollView {
+                Text(text)
+                    .font(.system(.body, design: .serif))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func transcriptSegments(_ segments: [TranscriptSegment]) -> some View {
+        transcriptPanel("Segments") {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    ForEach(segments.prefix(viewModel.transcriptSegmentRenderBudget)) { segment in
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(timeRange(segment))
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 126, alignment: .leading)
+                            Text(segment.text).textSelection(.enabled)
+                        }
+                        Divider()
+                    }
+                    if segments.count > viewModel.transcriptSegmentRenderBudget {
+                        Text("Showing the first \(viewModel.transcriptSegmentRenderBudget) of \(segments.count) segments")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transaction { transaction in
+                    transaction.animation = nil
+                }
+            }
+        }
+    }
+
+    private var transcriptPlaceholder: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "doc.text.magnifyingglass").font(.largeTitle)
+            Text("Completed transcriptions will appear here.").font(.footnote)
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func transcriptPanel<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             Text(title).font(.title3.bold())
             content()
                 .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .interactivePanel(cornerRadius: 16, accentColor: accentColor)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .versionedComponentAppear(profile: profile, pageID: pageID, direction: direction)
     }
 

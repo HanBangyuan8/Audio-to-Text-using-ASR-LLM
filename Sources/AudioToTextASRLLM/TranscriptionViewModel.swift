@@ -6,22 +6,23 @@ import UniformTypeIdentifiers
 @MainActor
 final class TranscriptionViewModel: ObservableObject {
     @Published var configuration: ProviderConfiguration {
-        didSet { saveConfiguration() }
+        didSet { persistConfiguration() }
     }
-    @Published var records: [TranscriptionRecord] = [] {
-        didSet { saveRecords() }
-    }
+    @Published private(set) var records: [TranscriptionRecord] = []
     @Published var selectedRecordID: TranscriptionRecord.ID?
     @Published var exportFormat: TextExportFormat = .markdown
     @Published var statusMessage = "Ready"
     @Published var isTranscribing = false
 
     private let client = ASRClient()
+    private let persistenceWorker = TranscriptionPersistenceWorker()
+    private let exportWorker = TranscriptionExportWorker()
+    private let runtimePlan = RuntimeFeaturePlan.current
+    private var recordIndex = TranscriptionRecordIndex(records: [])
     private var transcriptionTask: Task<Void, Never>?
 
     var selectedRecord: TranscriptionRecord? {
-        guard let selectedRecordID else { return records.first }
-        return records.first { $0.id == selectedRecordID } ?? records.first
+        recordIndex.record(id: selectedRecordID) ?? records.first
     }
 
     var canTranscribe: Bool {
@@ -38,9 +39,22 @@ final class TranscriptionViewModel: ObservableObject {
         records.filter { $0.result != nil }
     }
 
+    var queueSummary: TranscriptionQueueSummary {
+        recordIndex.summary
+    }
+
+    var visibleRecords: ArraySlice<TranscriptionRecord> {
+        records.prefix(runtimePlan.visibleTaskBudget)
+    }
+
+    var transcriptSegmentRenderBudget: Int {
+        runtimePlan.transcriptSegmentRenderBudget
+    }
+
     init() {
         configuration = Self.loadConfiguration()
         records = Self.loadRecords()
+        recordIndex = TranscriptionRecordIndex(records: records)
         selectedRecordID = records.first?.id
     }
 
@@ -63,6 +77,7 @@ final class TranscriptionViewModel: ObservableObject {
 
         guard !additions.isEmpty else { return }
         records.append(contentsOf: additions)
+        recordsDidChange()
         selectedRecordID = additions.first?.id
         statusMessage = "Added \(additions.count) audio file(s)"
     }
@@ -70,6 +85,7 @@ final class TranscriptionViewModel: ObservableObject {
     func removeSelectedRecord() {
         guard let selectedRecordID else { return }
         records.removeAll { $0.id == selectedRecordID }
+        recordsDidChange()
         self.selectedRecordID = records.first?.id
     }
 
@@ -80,14 +96,18 @@ final class TranscriptionViewModel: ObservableObject {
 
     func clearCompleted() {
         records.removeAll { $0.status == .complete }
+        recordsDidChange()
         selectedRecordID = records.first?.id
     }
 
     func resetFailedAndCanceled() {
-        for index in records.indices where records[index].status == .failed || records[index].status == .canceled {
-            records[index].status = .queued
-            records[index].errorMessage = nil
+        var updatedRecords = records
+        for index in updatedRecords.indices where updatedRecords[index].status == .failed || updatedRecords[index].status == .canceled {
+            updatedRecords[index].status = .queued
+            updatedRecords[index].errorMessage = nil
         }
+        records = updatedRecords
+        recordsDidChange()
         statusMessage = "Reset failed and canceled items"
     }
 
@@ -110,12 +130,13 @@ final class TranscriptionViewModel: ObservableObject {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        do {
-            let data = try Data(contentsOf: url)
-            configuration = try JSONDecoder().decode(ProviderConfiguration.self, from: data)
-            statusMessage = "Imported configuration"
-        } catch {
-            statusMessage = error.localizedDescription
+        Task {
+            do {
+                configuration = try await exportWorker.importConfiguration(from: url)
+                statusMessage = "Imported configuration"
+            } catch {
+                statusMessage = error.localizedDescription
+            }
         }
     }
 
@@ -127,14 +148,14 @@ final class TranscriptionViewModel: ObservableObject {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(configuration)
-            try data.write(to: url, options: .atomic)
-            statusMessage = "Exported configuration"
-        } catch {
-            statusMessage = error.localizedDescription
+        let configuration = configuration
+        Task {
+            do {
+                try await exportWorker.exportConfiguration(configuration, to: url)
+                statusMessage = "Exported configuration"
+            } catch {
+                statusMessage = error.localizedDescription
+            }
         }
     }
 
@@ -165,9 +186,12 @@ final class TranscriptionViewModel: ObservableObject {
         isTranscribing = false
         statusMessage = "Canceled"
 
-        for index in records.indices where records[index].status == .running || records[index].status == .queued {
-            records[index].status = .canceled
+        var updatedRecords = records
+        for index in updatedRecords.indices where updatedRecords[index].status == .running || updatedRecords[index].status == .queued {
+            updatedRecords[index].status = .canceled
         }
+        records = updatedRecords
+        recordsDidChange()
     }
 
     func exportSelectedResult() {
@@ -180,12 +204,14 @@ final class TranscriptionViewModel: ObservableObject {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
-        do {
-            let rendered = try TranscriptExporter.render(result, as: exportFormat)
-            try rendered.write(to: url, atomically: true, encoding: .utf8)
-            statusMessage = "Exported \(url.lastPathComponent)"
-        } catch {
-            statusMessage = error.localizedDescription
+        let format = exportFormat
+        Task {
+            do {
+                try await exportWorker.exportResult(result, format: format, to: url)
+                statusMessage = "Exported \(url.lastPathComponent)"
+            } catch {
+                statusMessage = error.localizedDescription
+            }
         }
     }
 
@@ -203,21 +229,14 @@ final class TranscriptionViewModel: ObservableObject {
 
         guard panel.runModal() == .OK, let folder = panel.url else { return }
 
-        do {
-            for record in completed {
-                guard let result = record.result else { continue }
-                let rendered = try TranscriptExporter.render(result, as: exportFormat)
-                let baseName = record.file.url.deletingPathExtension().lastPathComponent
-                let url = uniqueURL(
-                    in: folder,
-                    baseName: baseName,
-                    extension: exportFormat.fileExtension
-                )
-                try rendered.write(to: url, atomically: true, encoding: .utf8)
+        let format = exportFormat
+        Task {
+            do {
+                let count = try await exportWorker.exportAll(completed, format: format, to: folder)
+                statusMessage = "Exported \(count) transcript(s)"
+            } catch {
+                statusMessage = error.localizedDescription
             }
-            statusMessage = "Exported \(completed.count) transcript(s)"
-        } catch {
-            statusMessage = error.localizedDescription
         }
     }
 
@@ -229,34 +248,50 @@ final class TranscriptionViewModel: ObservableObject {
 
         for index in records.indices where records[index].status == .queued || records[index].status == .failed {
             if Task.isCancelled {
-                records[index].status = .canceled
+                updateRecord(at: index) { record in
+                    record.status = .canceled
+                }
                 continue
             }
 
-            records[index].status = .running
-            records[index].errorMessage = nil
+            updateRecord(at: index) { record in
+                record.status = .running
+                record.errorMessage = nil
+            }
             selectedRecordID = records[index].id
             statusMessage = "Transcribing \(records[index].file.name)..."
 
             do {
                 let result = try await client.transcribe(fileURL: records[index].file.url, configuration: configuration)
-                records[index].result = result
-                records[index].status = .complete
+                updateRecord(at: index) { record in
+                    record.result = result
+                    record.status = .complete
+                }
                 statusMessage = "Finished \(records[index].file.name)"
             } catch is CancellationError {
-                records[index].status = .canceled
+                updateRecord(at: index) { record in
+                    record.status = .canceled
+                }
                 statusMessage = "Canceled"
             } catch {
-                records[index].status = .failed
-                records[index].errorMessage = error.localizedDescription
+                updateRecord(at: index) { record in
+                    record.status = .failed
+                    record.errorMessage = error.localizedDescription
+                }
                 statusMessage = error.localizedDescription
             }
         }
     }
 
-    private func saveConfiguration() {
-        guard let data = try? JSONEncoder().encode(configuration) else { return }
-        UserDefaults.standard.set(data, forKey: "ProviderConfiguration")
+    private func persistConfiguration() {
+        let snapshot = configuration
+        let debounceNanoseconds = runtimePlan.configurationDebounceNanoseconds
+        Task {
+            await persistenceWorker.scheduleConfigurationSave(
+                configuration: snapshot,
+                debounceNanoseconds: debounceNanoseconds
+            )
+        }
     }
 
     private static func loadConfiguration() -> ProviderConfiguration {
@@ -268,27 +303,35 @@ final class TranscriptionViewModel: ObservableObject {
         return configuration
     }
 
-    private func saveRecords() {
-        let snapshot = records.map { record in
-            var copy = record
-            if copy.status == .running {
-                copy.status = .queued
-            }
-            return copy
-        }
-
-        do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            let data = try encoder.encode(snapshot)
-            try FileManager.default.createDirectory(
-                at: Self.applicationSupportDirectory,
-                withIntermediateDirectories: true
+    private func persistRecords() {
+        let snapshot = records
+        let destination = Self.recordsURL
+        let debounceNanoseconds = runtimePlan.persistenceDebounceNanoseconds
+        Task {
+            await persistenceWorker.scheduleRecordsSave(
+                records: snapshot,
+                destination: destination,
+                debounceNanoseconds: debounceNanoseconds
             )
-            try data.write(to: Self.recordsURL, options: .atomic)
-        } catch {
-            statusMessage = error.localizedDescription
         }
+    }
+
+    private func recordsDidChange() {
+        recordIndex.replace(with: records)
+        persistRecords()
+    }
+
+    private func updateRecord(
+        at index: Int,
+        mutation: (inout TranscriptionRecord) -> Void
+    ) {
+        guard records.indices.contains(index) else { return }
+        let oldRecord = records[index]
+        var newRecord = oldRecord
+        mutation(&newRecord)
+        records[index] = newRecord
+        recordIndex.update(from: oldRecord, to: newRecord)
+        persistRecords()
     }
 
     private static func loadRecords() -> [TranscriptionRecord] {
@@ -348,15 +391,4 @@ final class TranscriptionViewModel: ObservableObject {
         }
     }
 
-    private func uniqueURL(in folder: URL, baseName: String, extension fileExtension: String) -> URL {
-        var candidate = folder.appendingPathComponent(baseName).appendingPathExtension(fileExtension)
-        var counter = 2
-        while FileManager.default.fileExists(atPath: candidate.path) {
-            candidate = folder
-                .appendingPathComponent("\(baseName)-\(counter)")
-                .appendingPathExtension(fileExtension)
-            counter += 1
-        }
-        return candidate
-    }
 }

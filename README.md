@@ -82,13 +82,13 @@ swift run AudioToTextASRLLM
 
 ```bash
 ./scripts/package-dmg.sh
-open "dist/Audio-to-Text-using-ASR-LLM-v1.1.0-macOS-universal.app"
+open "dist/Audio-to-Text-using-ASR-LLM-v1.2.0-macOS-universal.app"
 ```
 
 The package script creates a signed ad-hoc universal macOS `.app`, a versioned zip archive, and a DMG image:
 
 ```text
-dist/Audio-to-Text-using-ASR-LLM-v1.1.0-macOS-universal.zip
+dist/Audio-to-Text-using-ASR-LLM-v1.2.0-macOS-universal.zip
 ```
 
 ## Data Location

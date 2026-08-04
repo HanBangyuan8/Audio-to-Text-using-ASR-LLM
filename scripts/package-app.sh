@@ -4,7 +4,7 @@ set -euo pipefail
 PRODUCT_NAME="Audio to Text using ASR LLM"
 EXECUTABLE_NAME="AudioToTextASRLLM"
 BUNDLE_IDENTIFIER="dev.han.AudioToTextASRLLM"
-VERSION="1.1.0"
+VERSION="1.2.0"
 CONFIGURATION="${1:-release}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -118,7 +118,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
     <key>CFBundleShortVersionString</key>
     <string>$VERSION</string>
     <key>CFBundleVersion</key>
-    <string>4</string>
+    <string>5</string>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>NSHighResolutionCapable</key>

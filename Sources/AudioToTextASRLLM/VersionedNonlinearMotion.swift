@@ -460,6 +460,116 @@ struct VersionedPageSwitchMotionModifier: ViewModifier {
 }
 
 @available(macOS 12.0, *)
+private enum VersionedPersistentPagePhase {
+    case hidden
+    case entering
+    case resolving
+    case settled
+
+    var opacity: Double {
+        switch self {
+        case .hidden, .entering: return 0
+        case .resolving: return 0.98
+        case .settled: return 1
+        }
+    }
+}
+
+@available(macOS 12.0, *)
+struct VersionedPersistentPageMotionModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: VersionedPersistentPagePhase = .hidden
+    @State private var motionTask: Task<Void, Never>?
+    let profile: VersionedMotionProfile
+    let isSelected: Bool
+    let direction: PageNavigationDirection
+    let scalesContent: Bool
+
+    private var signedOffset: CGFloat {
+        switch direction {
+        case .upward: return -profile.pageOffset
+        case .downward: return profile.pageOffset
+        case .unchanged: return profile.pageOffset * 0.35
+        }
+    }
+
+    private var resolvedOffset: CGFloat {
+        switch phase {
+        case .hidden, .entering: return signedOffset
+        case .resolving: return -signedOffset * profile.pageResolveBounce
+        case .settled: return 0
+        }
+    }
+
+    private var resolvedScale: CGFloat {
+        switch phase {
+        case .hidden, .entering: return profile.pageScale
+        case .resolving: return profile.pageResolveScale
+        case .settled: return 1
+        }
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(reduceMotion || profile.disablesMotion ? (isSelected ? 1 : 0) : (isSelected ? phase.opacity : 0))
+            .offset(y: reduceMotion || profile.disablesMotion ? 0 : resolvedOffset)
+            .scaleEffect(
+                reduceMotion || profile.disablesMotion || !scalesContent ? 1 : resolvedScale,
+                anchor: direction == .upward ? .top : .bottom
+            )
+            .allowsHitTesting(isSelected)
+            .accessibilityHidden(!isSelected)
+            .zIndex(isSelected ? 1 : 0)
+            .onAppear {
+                if isSelected { restart() }
+            }
+            .onChange(of: isSelected) { selected in
+                selected ? restart() : hide()
+            }
+            .onDisappear {
+                motionTask?.cancel()
+            }
+    }
+
+    private func restart() {
+        guard !reduceMotion, !profile.disablesMotion else {
+            phase = .settled
+            return
+        }
+        var resetTransaction = Transaction()
+        resetTransaction.disablesAnimations = true
+        withTransaction(resetTransaction) {
+            phase = .entering
+        }
+        motionTask?.cancel()
+        motionTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: profile.pageResetDelay)
+            guard !Task.isCancelled else { return }
+            withAnimation(profile.pageSwitchAnimation) {
+                phase = .resolving
+            }
+            try? await Task.sleep(nanoseconds: profile.pageSettleDelay)
+            guard !Task.isCancelled else { return }
+            withAnimation(profile.settleAnimation) {
+                phase = .settled
+            }
+        }
+    }
+
+    private func hide() {
+        motionTask?.cancel()
+        motionTask = nil
+        guard !reduceMotion, !profile.disablesMotion else {
+            phase = .hidden
+            return
+        }
+        withAnimation(profile.pageSwitchAnimation) {
+            phase = .hidden
+        }
+    }
+}
+
+@available(macOS 12.0, *)
 struct VersionedComponentAppearModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase: VersionedComponentPhase = .hidden
@@ -589,6 +699,25 @@ extension View {
 
     func versionedComponentAppear(profile: VersionedMotionProfile, pageID: String, direction: PageNavigationDirection, isChart: Bool = false) -> some View {
         modifier(VersionedComponentAppearModifier(profile: profile, pageID: pageID, direction: direction, isChart: isChart))
+    }
+}
+
+@available(macOS 12.0, *)
+extension View {
+    func versionedPersistentPageMotion(
+        profile: VersionedMotionProfile,
+        isSelected: Bool,
+        direction: PageNavigationDirection,
+        scalesContent: Bool = true
+    ) -> some View {
+        modifier(
+            VersionedPersistentPageMotionModifier(
+                profile: profile,
+                isSelected: isSelected,
+                direction: direction,
+                scalesContent: scalesContent
+            )
+        )
     }
 }
 
